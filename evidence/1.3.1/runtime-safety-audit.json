@@ -1,0 +1,35 @@
+{
+  "changed_methods": [
+    "target",
+    "idle",
+    "evidence",
+    "status"
+  ],
+  "unchanged_methods": [
+    "__init__",
+    "user_check",
+    "environment",
+    "_probe",
+    "helper",
+    "validate_prefix",
+    "validate_record",
+    "log_tail",
+    "options",
+    "_plan",
+    "plan",
+    "maintenance_lock",
+    "_save",
+    "snapshot_record",
+    "snapshot_manifest",
+    "filesystem_grants",
+    "_copy_snapshot",
+    "command",
+    "execute",
+    "install",
+    "restore",
+    "exchange",
+    "helper_plan",
+    "install_helper"
+  ],
+  "result": "Installer/confirmation binding/snapshot/restore/helper commands unchanged at AST level; target changed from basename to PE validation. idle/evidence/status changes are user-facing descriptions."
+}

@@ -1,0 +1,10 @@
+{
+  "frontend_tests": 8,
+  "backend_tests": 136,
+  "backend_seconds": 4.97,
+  "rendered_cases": 7,
+  "all_backend_files_byte_identical_to": "1.1.1",
+  "physical_steam_deck": false,
+  "graphics_or_fps_tests": false,
+  "ui_bundle_sha256": "b3269ab7e7787b999ea67af97357065f36b51880b25f8b8c7d3479152221e69c"
+}

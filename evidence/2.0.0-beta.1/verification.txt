@@ -1,0 +1,31 @@
+........................................................................ [ 31%]
+........................................................................ [ 62%]
+........................................................................ [ 93%]
+...............                                                          [100%]
+231 passed in 7.63s
+✔ normalizes comma-separated DLL basenames and deduplicates (1.793847ms)
+✔ batch addition keeps previous entries and their custom orders (0.43874ms)
+✔ manual multiple names update only explicitly named modules (0.280863ms)
+✔ repeated batches are cumulative, not single-value replacement (0.251868ms)
+✔ blank names, paths, injections and double dots are rejected (0.44561ms)
+✔ self-contained bundle loads and registers both Decky entry routes (9.65742ms)
+✔ all tabs and every settings page retain controls, labels, and keyboard page focus (821.440136ms)
+✔ mouse toggle, slider keyboard adjustment, selection, text save and draft preservation (519.318859ms)
+✔ raw R3 after idle clicks owned modal, refuses foreign overlay, and cleans subscription (674.911692ms)
+✔ measured reader preserves newline-rich diagnostics across pages and resize (425.066817ms)
+✔ compact and narrow mode paginate two controls; missing raw API stays usable (698.791545ms)
+✔ reads visible owner window while module window height is zero (5.353208ms)
+✔ uses the owner document viewport fallback (1.187014ms)
+✔ retains footer clearance for scaled Steam UI (1.099002ms)
+✔ ignores transitional zero visualViewport dimensions (1.101696ms)
+✔ invalid, offscreen, detached and hidden geometry never commits zero (2.784997ms)
+✔ schedules and listens in owner window; missing observer is nonfatal; cleans up (1.76258ms)
+✔ focus scrolling changes only the pane and works without a same-realm HTMLElement (0.951641ms)
+ℹ tests 18
+ℹ suites 0
+ℹ pass 18
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3781.682387

@@ -1,0 +1,8 @@
+{
+  "root_executable": true,
+  "local_dll_exists": true,
+  "dlls_reported": [],
+  "notes": [
+    "Unsafe archive/file path: '.'"
+  ]
+}

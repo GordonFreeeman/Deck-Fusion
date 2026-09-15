@@ -1,0 +1,14 @@
+{
+  "backend_startup": true,
+  "state_rpc": true,
+  "diagnostics_rpc": true,
+  "version": "1.2.2",
+  "zip_crc": true,
+  "zip_paths": true,
+  "no_symlinks_or_fonts": true,
+  "no_root_flag": true,
+  "source_bundle_identical": true,
+  "reviewed_code_hashes": true,
+  "js_syntax": true,
+  "isolated_extraction": true
+}

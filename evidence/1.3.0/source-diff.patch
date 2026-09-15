@@ -1,0 +1,368 @@
+--- 1.2.2/main.py
++++ 1.3.0/main.py
+@@ -52,7 +52,7 @@
+ class Plugin:
+     async def _main(self):
+         self._initialize()
+-        LOG.info('Deck Fusion 1.2.2 initialized, no root privilege requested.')
++        LOG.info('Deck Fusion 1.3.0 initialized, no root privilege requested.')
+ 
+     def _initialize(self):
+         if getattr(self, '_engine', None) is not None: return
+@@ -62,9 +62,10 @@
+         self._mutex = threading.RLock()
+         self._jobs = {}
+         self._tasks = set()
++        self._runtime_cancels = {}
+         self._closing = False
+ 
+-    def _call_sync(self, action: str, payload: dict, progress=lambda *_: None):
++    def _call_sync(self, action: str, payload: dict, progress=lambda *_: None, cancel=None):
+         e = self._engine
+         # Inter-process lock also prevents a hot-reloaded backend racing its old instance.
+         with self._mutex, (e.data / 'backend.lock').open('a+') as lock:
+@@ -77,6 +78,12 @@
+                     return {'packages':e.packages.status(), 'games':e.games(), 'data':str(e.data),
+                             'hardware':e.hardware(), 'settings':e.settings(), 'bundled':e.packages.bundle_status(),
+                             'legacy_layers':e.old_layers(), 'lsfg_install':__import__('fusion_util').read_json(e.data/'lsfg-install.json',None)}
++                if action == 'runtime_status': return e.prereqs.status(payload)
++                if action == 'runtime_plan': return e.prereqs.plan(payload)
++                if action == 'runtime_install': return e.prereqs.install(payload, progress, cancel)
++                if action == 'runtime_restore': return e.prereqs.restore(payload, progress, cancel)
++                if action == 'runtime_helper_plan': return e.prereqs.helper_plan()
++                if action == 'runtime_helper_install': return e.prereqs.install_helper(payload, progress, cancel)
+                 if action == 'settings': return e.set_settings(payload)
+                 if action == 'https': return __import__('fusion_network').tls_context()[1]
+                 if action == 'check_updates': return e.packages.check_updates(progress)
+@@ -134,7 +141,7 @@
+     async def start_job(self, action: str, payload: dict):
+         self._initialize()
+         if self._closing: raise FusionError('Plugin is unloading.')
+-        if action not in ('install','shader','common_shaders','lsfg_setup','legacy_disable','scan','prepare','review','plan','check_updates','bundled_setup'):
++        if action not in ('install','shader','common_shaders','lsfg_setup','legacy_disable','scan','prepare','review','plan','check_updates','bundled_setup','runtime_status','runtime_plan','runtime_install','runtime_restore','runtime_helper_plan','runtime_helper_install'):
+             raise FusionError('Unsupported job.')
+         if not isinstance(payload,dict) or len(json.dumps(payload)) > 3*1024*1024:
+             raise FusionError('Invalid job payload.')
+@@ -143,15 +150,19 @@
+         job_id = uuid.uuid4().hex
+         job = {'id':job_id,'action':action,'state':'running','message':'Starting','progress':0.,'started':time.time()}
+         self._jobs[job_id] = job
++        cancel = threading.Event() if action in ('runtime_install','runtime_restore','runtime_helper_install') else None
++        if cancel: self._runtime_cancels[job_id] = cancel
+         def progress(message, fraction): job.update(message=str(message),progress=max(0.,min(1.,float(fraction))))
+         async def runner():
+             try:
+-                result = await asyncio.to_thread(self._call_sync,action,payload,progress)
++                result = await asyncio.to_thread(self._call_sync,action,payload,progress,cancel)
+                 job.update(state='done',progress=1.,message='Completed',result=result)
+             except Exception as error:
+                 LOG.error('Deck Fusion %s failed: %s\n%s',action,error,traceback.format_exc())
+                 job.update(state='error',message=str(error),error=str(error))
+-            finally: job['finished'] = time.time()
++            finally:
++                job['finished'] = time.time()
++                self._runtime_cancels.pop(job_id, None)
+         task = asyncio.create_task(runner()); self._tasks.add(task)
+         task.add_done_callback(self._tasks.discard)
+         # Bound memory without removing a running job or the most recent results.
+@@ -161,6 +172,14 @@
+         return {'id':job_id}
+ 
+     @exposed
++    async def cancel_runtime(self, job_id: str):
++        self._initialize()
++        event = self._runtime_cancels.get(job_id)
++        if event is None: raise FusionError('No cancellable runtime operation is active for this job.')
++        event.set()
++        return {'requested': True, 'note': 'Cancellation requested. Completed snapshots and any partial installer changes are retained; see the runtime receipt.'}
++
++    @exposed
+     async def get_job(self, job_id: str):
+         self._initialize()
+         if job_id not in self._jobs: raise FusionError('Job not found. Check Apply → recovery if the plugin was restarted.')
+--- 1.2.2/py_modules/fusion_engine.py
++++ 1.3.0/py_modules/fusion_engine.py
+@@ -15,6 +15,7 @@
+ from fusion_launch import compose_launch, restore_launch, launch_environment, shell_tokens, merge_dll_overrides, parse_dll_overrides, launch_assignments
+ from fusion_policy import hardware_info, resolve_settings
+ from fusion_mods import cyberpunk_diagnostics
++from fusion_prereqs import PrefixRuntimes
+ from fusion_wine import inspect_overrides, resolve_loaders, guard_payload, RESH_PROXIES
+ from fusion_shaders import opti_schema, pack_files, preset_text
+ from fusion_steam import installed_games, pe_info, running_game, scan_game
+@@ -86,6 +87,7 @@
+         self.wrapper = self.data / 'bin/launch'
+         self.layer_file = self.home / '.local/share/vulkan/implicit_layer.d/DeckFusion.LSFG.json'
+         self.install_runtime()
++        self.prereqs = PrefixRuntimes(self)
+ 
+     def install_runtime(self):
+         for name in ('fusion_runtime.py', 'fusion_launch.py', 'fusion_util.py'):
+@@ -733,7 +735,7 @@
+ 
+     def diagnostics(self, appid=''):
+         status = self.packages.status()
+-        result = {'version':'1.2.2','data':str(self.data),'home':str(self.home),
++        result = {'version':'1.3.0','data':str(self.data),'home':str(self.home),
+                   'packages':status,'legacy_layers':self.old_layers(),
+                   'settings':self.settings(), 'bundled':self.packages.bundle_status(),
+                   'https':tls_context()[1], 'last_error':read_json(self.data/'last-error.json',None),
+--- 1.2.2/py_modules/fusion_runtime.py
++++ 1.3.0/py_modules/fusion_runtime.py
+@@ -1,6 +1,7 @@
+ #!/usr/bin/env python3
+ """Persistent, fail-open launch wrapper. Runs as the game user, never as root."""
+ from __future__ import annotations
++import fcntl
+ import json
+ import os
+ from pathlib import Path
+@@ -16,6 +17,19 @@
+     root = Path(__file__).resolve().parent.parent
+     command = argv[3:]
+     env = dict(os.environ)
++    # While maintenance owns this per-game lock, do not launch into a prefix
++    # being modified. No global Steam setting or other game is affected.
++    lock_path = root / 'profiles' / argv[1] / 'prefix-maintenance.lock'
++    if lock_path.exists():
++        try:
++            with lock_path.open('r') as handle:
++                try: fcntl.flock(handle.fileno(), fcntl.LOCK_SH | fcntl.LOCK_NB)
++                except BlockingIOError:
++                    print('Deck Fusion: this game has a prefix runtime operation in progress. Wait or cancel it in Runtimes.', file=sys.stderr)
++                    return 75
++        except OSError as error:
++            print(f'Deck Fusion: cannot verify the runtime maintenance lock: {error}', file=sys.stderr)
++            return 75
+     try:
+         cfg = json.loads((root / 'profiles' / argv[1] / 'runtime.json').read_text())
+         # A crash between file installation and Steam option commit is recoverable:
+@@ -24,7 +38,7 @@
+         log = root / 'profiles' / argv[1] / 'last-launch.json'
+         summary = {'command_executable': command[0], 'settings': {k: env.get(k) for k in (
+             'WINEDLLOVERRIDES', 'DECK_FUSION_LSFG', 'LSFGVK_CONFIG', 'DXVK_FRAME_RATE', 'VKD3D_FRAME_RATE', 'PROTON_ENABLE_NVAPI', 'ENABLE_GAMESCOPE_WSI', 'DISABLE_GAMESCOPE_WSI', 'GAMESCOPE_WSI_FRAME_LIMITER_AWARE', 'GAMESCOPE_WAYLAND_DISPLAY', 'GAMESCOPE_LIMITER_FILE', 'MESA_VK_WSI_PRESENT_MODE', 'PROTON_FSR4_INDICATOR', 'FSR4_WATERMARK', 'FSR_WATERMARK', 'MLSR-WATERMARK')}}
+-        summary['wrapper_version'] = '1.2.2'
++        summary['wrapper_version'] = '1.3.0'
+         summary['time'] = time.time()
+         summary['watermark_strategy'] = 'SDK variable absent when off; paired OptiScaler INI uses auto'
+         summary['limiter_route_requested'] = ('mesa-fifo-without-gamescope-wsi'
+--- 1.2.2/src/index.js
++++ 1.3.0/src/index.js
+@@ -1,4 +1,4 @@
+-/* Deck Fusion 1.2.2 bundle. Generated by scripts/build.py. */
++/* Deck Fusion 1.3.0 bundle. Generated by scripts/build.py. */
+ /* SPDX-License-Identifier: LGPL-2.1-only
+  * Adapted from SteamDeckHomebrew/loader-api src/index.ts, API v2.
+  * Modified 2026-09-11: JS-only, minimal client exports, manifest supplied locally.
+@@ -207,7 +207,7 @@
+ class ScreenBoundary extends R.Component{
+   constructor(props){super(props);this.state={error:null};}
+   static getDerivedStateFromError(error){return {error:String(error?.message||error||'Unknown interface error')};}
+-  componentDidCatch(error,info){console.error('[Deck Fusion 1.2.2] Screen error',error,info?.componentStack);}
++  componentDidCatch(error,info){console.error('[Deck Fusion 1.3.0] Screen error',error,info?.componentStack);}
+   render(){
+     if(!this.state.error)return this.props.children;
+     // Intentionally no Decky components or DOM measurement in this fallback.
+@@ -261,6 +261,34 @@
+     ));
+ }
+ 
++function RuntimeConfirmation({plan,onDecision,closeModal}){
++  const settled=useRef(false);
++  const decide=value=>{if(settled.current)return;settled.current=true;onDecision(value);closeModal?.();};
++  useEffect(()=>()=>{if(!settled.current){settled.current=true;onDecision(false);}},[]);
++  const helper=!!plan.commands, restoring=plan.restoring===true;
++  const card=(key,content)=>h(U.Focusable,{key,tabIndex:0,'data-runtime-confirm-card':key,
++    onFocus:e=>{e.currentTarget?.scrollIntoView?.({block:'nearest'});e.currentTarget.style.boxShadow='inset 0 0 0 2px currentColor';},
++    onBlur:e=>{e.currentTarget.style.boxShadow='none';},
++    onKeyDown:e=>{const node=e.currentTarget;if(e.target!==node)return;
++      const delta={ArrowDown:36,ArrowUp:-36,PageDown:Math.max(24,node.clientHeight-24),PageUp:-Math.max(24,node.clientHeight-24)}[e.key];
++      if(delta===undefined)return;const before=node.scrollTop;node.scrollTop+=delta;
++      if(node.scrollTop!==before){e.preventDefault();e.stopPropagation();}
++    },style:{...ui.box,overflowY:'auto',maxHeight:'min(230px, max(64px, calc(100vh - 356px)))'}},content);
++  return h(U.ConfirmModal,{
++    strTitle:helper?'Install Protontricks helper?':restoring?'Restore the saved Proton prefix?':'Install Cyberpunk runtimes?',
++    strDescription:helper?'Official Flathub package for this user':`${plan.target.game} · App ID ${plan.target.appid}`,
++    strOKButtonText:helper?'Install helper':restoring?'Keep current & restore':'Back up & install',
++    strCancelButtonText:'Cancel',bDisableBackgroundDismiss:true,onOK:()=>decide(true),onCancel:()=>decide(false),closeModal:()=>decide(false)},
++    h('div',{'data-runtime-confirm-scroll':true,style:{maxHeight:'min(48vh, max(64px, calc(100vh - 330px)))',overflowY:'auto',overflowX:'hidden',maxWidth:680,overflowWrap:'anywhere',overscrollBehavior:'contain',paddingRight:8}},
++      helper?card('helper',plan.note):h(R.Fragment,null,
++        card('target',h('div',null,h('strong',null,'Selected Proton prefix'),code(plan.target.prefix),
++          h('div',null,restoring?'Restore the latest completed snapshot of this prefix.':`Install: ${plan.runtimes.join(' + ')}`),
++          h('div',{style:ui.muted},`Copy: ${Math.ceil(plan.copy_bytes/1048576)} MiB · Minimum free space: ${Math.ceil(plan.required_space_bytes/1048576)} MiB · Available: ${Math.floor(plan.free_bytes/1048576)} MiB`))),
++        ...plan.warnings.map((message,index)=>card(`warning-${index}`,message)),
++        plan.filesystem_grants?.length>0&&card('filesystems',h('div',null,h('strong',null,'Temporary Flatpak filesystem access'),h('p',null,'Protontricks needs these detected Steam libraries to find the game, Proton and Steam Runtime. These grants apply only to this operation; no permanent permission override is written.'),code(plan.filesystem_grants)))),
++      card('unchanged','Your game directory, mod-loader DLLs, launch options and graphics profile are not changed by this operation. Cancelling this confirmation changes nothing.')));
++}
++
+ function customEntries(value){
+   const result=Object.create(null);
+   for(const group of String(value||'').split(';')){
+@@ -307,6 +335,10 @@
+   const [dllName,setDllName]=useState(''),[dllOrder,setDllOrder]=useState('n,b');
+   const [dllBatch,setDllBatch]=useState([]),[dllSearch,setDllSearch]=useState(''),[showAllDLLs,setShowAllDLLs]=useState(false);
+   const [modInfo,setModInfo]=useState(null),[showModLogs,setShowModLogs]=useState(false);
++  const [runtimeInfo,setRuntimeInfo]=useState(null),[runtimePrefix,setRuntimePrefix]=useState('');
++  const [runtimeVerbs,setRuntimeVerbs]=useState(['d3dcompiler_47','vcrun2022']);
++  const [runtimeJob,setRuntimeJob]=useState(null),[showRuntimeLog,setShowRuntimeLog]=useState(false);
++  const [showRuntimeFiles,setShowRuntimeFiles]=useState(false),[showHelperLog,setShowHelperLog]=useState(false);
+   const modalRef=useRef(null);
+   const generation=useRef(0), mounted=useRef(true), busyRef=useRef(false);
+   useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;generation.current++;modalRef.current?.Close?.();};},[]);
+@@ -315,7 +347,7 @@
+   useEffect(()=>{
+     let active=true;setWineError('');
+     const owner=`${p?.appid||''}|${p?.exe||''}`;
+-    if(wineOwner.current!==owner){wineOwner.current=owner;setWineInfo(null);setDllBatch([]);setDllSearch('');setDllName('');setShowAllDLLs(false);setModInfo(null);setShowModLogs(false);}
++    if(wineOwner.current!==owner){wineOwner.current=owner;setWineInfo(null);setDllBatch([]);setDllSearch('');setDllName('');setShowAllDLLs(false);setModInfo(null);setShowModLogs(false);setRuntimeInfo(null);setRuntimePrefix('');setShowRuntimeLog(false);setShowRuntimeFiles(false);setShowHelperLog(false);}
+     if(!p?.exe||observed===null){setWineLoading(false);return;}
+     // Keep same-game controls mounted while recalculating proposals. Removing
+     // the entire inventory here caused focus loss and vertical layout jumps.
+@@ -355,13 +387,15 @@
+   }
+   async function job(action,payload){
+     const {id}=await backend('start_job',action,payload);
+-    while(true){
++    const cancellable=['runtime_install','runtime_restore','runtime_helper_install'].includes(action);
++    if(cancellable&&mounted.current)setRuntimeJob(id);
++    try{while(true){
+       const j=await backend('get_job',id);
+       if(mounted.current){setMessage(j.message);setProgress(j.progress);}
+       if(j.state==='error')throw new Error(j.error||j.message);
+       if(j.state==='done')return j.result;
+       await sleep(450);
+-    }
++    }}finally{if(cancellable&&mounted.current)setRuntimeJob(null);}
+   }
+   async function refresh(){const value=await rpc('state');if(mounted.current)setState(value);return value;}
+   async function libraryFilter(include_shortcuts){
+@@ -412,6 +446,49 @@
+       try{modalRef.current=U.showModal(h(Confirmation,{plan,live,onDecision:resolve}),undefined,{strTitle:'Deck Fusion',bNeverPopOut:true});}
+       catch(error){reject(error);}
+     });
++  }
++  async function runtimePayload(prefix=runtimePrefix){
++    if(!p?.exe||!/cyberpunk2077\.exe$/i.test(p.exe))throw new Error('Select Cyberpunk2077.exe first.');
++    return {appid:p.appid,exe:p.exe,prefix:prefix||null,launch:await readLaunch(apps(),p.appid),runtimes:[...runtimeVerbs]};
++  }
++  async function inspectRuntime(prefix=runtimePrefix){
++    const payload=await runtimePayload(prefix);
++    const info=await job('runtime_status',payload);
++    if(mounted.current){setRuntimeInfo(info);setRuntimePrefix(info.prefix||'');}
++    status('Prefix inspection complete. File presence does not establish successful mod loading.');
++    return info;
++  }
++  async function confirmRuntime(plan){
++    if(!U.showModal||!U.ConfirmModal)throw new Error('Decky confirmation UI is unavailable. No runtime changes were made.');
++    if(!mounted.current)return false;
++    return await new Promise((resolve,reject)=>{
++      try{modalRef.current=U.showModal(h(RuntimeConfirmation,{plan,onDecision:resolve}),undefined,{strTitle:'Deck Fusion',bNeverPopOut:true});}
++      catch(error){reject(error);}
++    });
++  }
++  async function requestRuntime(restore=false){
++    const payload={...await runtimePayload(),restore};
++    const plan=await job('runtime_plan',payload);
++    const accepted=await confirmRuntime(plan);modalRef.current=null;
++    if(!accepted){status('Cancelled. No runtime, prefix or game-file changes were made.');return;}
++    if(await readLaunch(apps(),payload.appid)!==payload.launch)throw new Error('Steam launch options changed during confirmation. Inspect the prefix again before installing.');
++    let result;
++    try{result=await job(restore?'runtime_restore':'runtime_install',{...payload,approval:plan.approval});}
++    finally{try{const info=await job('runtime_status',payload);if(mounted.current){setRuntimeInfo(info);setRuntimePrefix(info.prefix||'');setShowRuntimeLog(true);}}catch{/* Keep the original install/restore error. */}}
++    status(restore?'Saved prefix restored. The displaced prefix is retained; see its path below.':result.note||'Runtime operation finished. Review its receipt before launching.');
++  }
++  async function installRuntimeHelper(){
++    const plan=await job('runtime_helper_plan',{});
++    const accepted=await confirmRuntime(plan);modalRef.current=null;
++    if(!accepted){status('Helper installation cancelled. Nothing was installed.');return;}
++    try{await job('runtime_helper_install',{approval:plan.approval});}
++    finally{try{await inspectRuntime();setShowHelperLog(true);}catch{/* Keep the original helper failure. */}}
++    status('Protontricks helper is ready. Select the runtimes and confirm Back up & install.');
++  }
++  async function cancelRuntime(){
++    if(!runtimeJob)return;
++    try{await backend('cancel_runtime',runtimeJob);status('Cancellation requested. Wait for the operation to stop; its receipt and any completed snapshot are retained.');}
++    catch(error){setError(String(error.message||error));}
+   }
+   async function requestApply(remove=false){
+     if(!p)throw new Error('Select a game first.');
+@@ -679,6 +756,7 @@
+     dllBatch.length>0&&button('Clear selection',()=>setDllBatch([]),busy,'Clears only the checkboxes. Existing overrides and files are untouched.'),
+     text('DLL module names',dllName,setDllName,'One or more names, for example dxgi.dll, version.dll, winmm.dll. Comma-separated; no paths.'),
+     button('Add / update custom overrides',addOverride,busy||!dllName.trim(),'Adds all entered names. An existing entry for the same exact name takes the selected load order; all other entries stay unchanged.'),
++    cyberpunk&&button('Open Cyberpunk runtime setup',()=>{setTab('runtimes');run(()=>inspectRuntime());},busy,'Check or install d3dcompiler_47 and vcrun2022 inside the Proton prefix, with a snapshot first.'),
+     cyberpunk&&button('Check Cyberpunk mod files and logs',()=>run(async()=>{setModInfo(await rpc('mod_diagnostics',{appid:p.appid,exe:p.exe}));status('Mod file inventory loaded. Presence is not proof that a mod ran successfully.');}),busy,'Read-only checks for CET, RED4ext, redscript and their own logs. No dependency downloads or script-cache deletion.'),
+     modInfo&&h('div',{'data-mod-diagnostics':true,style:ui.box},h('h3',null,'Cyberpunk mod evidence'),h('p',null,modInfo.note),
+       ...modInfo.frameworks.map(item=>modCard(item.name,h('strong',null,item.name),
+@@ -715,8 +793,49 @@
+     diagnostic&&code(diagnostic),
+     button('Recover unfinished operation',()=>run(recover),busy),
+     note('Restore managed games before uninstalling. The persistent wrapper and backups survive plugin removal so launch entries are not stranded.')):note('Select a game in Library.');
++  const runtimePage=p&&cyberpunk?section('Cyberpunk Proton runtimes',
++    note('d3dcompiler_47 and the Visual C++ 2022 runtime belong in the game’s Proton prefix, not bin/x64. Their absence from bin does not mean they are missing. This page is separate from graphics Apply.'),
++    button('Check prefix and runtimes',()=>run(()=>inspectRuntime()),busy,'Reads the current Steam launch options, detected prefixes, helper availability, files and installation receipts. No installers are run.'),
++    !runtimeInfo&&note('Start with Check prefix and runtimes. Choose an existing initialized prefix; this workflow never creates or resets one.'),
++    runtimeInfo&&h(R.Fragment,null,
++      select('Proton prefix',runtimePrefix,runtimeInfo.prefixes.map(path=>({label:path,data:path})),path=>{setRuntimePrefix(path);run(()=>inspectRuntime(path));},
++        'Uses this game’s App ID and Proton selection from Steam. Multiple detected prefixes require an explicit choice.','No initialized prefix found. Launch the game once with its intended Proton version, close it, then check again.',busy),
++      runtimeInfo.prefix&&code(runtimeInfo.prefix),
++      h('div',{style:ui.box},h('strong',null,`Protontricks: ${runtimeInfo.helper.available?runtimeInfo.helper.kind+' installation detected':'not installed'}`),
++        h('div',{style:ui.muted},'The helper resolves Proton from Steam. Deck Fusion does not invoke system Wine or change your chosen compatibility tool.')),
++      !runtimeInfo.helper.available&&button('Install Protontricks helper',()=>run(installRuntimeHelper),busy||!runtimeInfo.helper.flatpak,'Separate confirmation. Downloads the official Flatpak plus its dependencies for your user account; no sudo or SteamOS modifications.'),
++      ...(runtimeInfo.blockers||[]).map((message,index)=>h('div',{key:`runtime-block-${index}`},note(message,true))),
++      ...(runtimeInfo.notes||[]).map((message,index)=>h('div',{key:`runtime-note-${index}`},note(message,true))),
++      toggle('Show runtime file details',showRuntimeFiles,setShowRuntimeFiles,'Winetricks receipts and DLL presence are evidence, not proof that the installed versions or mods work.'),
++      ...(showRuntimeFiles?runtimeInfo.runtimes||[]:[]).map(item=>modCard('runtime-'+item.name,h('strong',null,item.name),
++        h('div',null,item.recorded?'Winetricks installation receipt found':'No Winetricks installation receipt found'),
++        ...item.files.map(file=>h('div',{key:file.path,style:ui.mono},`${file.present?'Found':'Not found'}: ${file.path}${file.symlink?' (linked file)':''}`)),
++        h('div',{style:ui.muted},item.note)))),
++    h('h3',null,'Choose dependencies'),
++    ...['d3dcompiler_47','vcrun2022'].map(verb=>toggle(verb,runtimeVerbs.includes(verb),enabled=>{
++      if(!busyRef.current)setRuntimeVerbs(old=>enabled?[...new Set([...old,verb])]:old.filter(v=>v!==verb));
++    },verb==='d3dcompiler_47'?'Microsoft D3D shader compiler. Use the upstream installer recipe, not a random DLL download.':'Microsoft Visual C++ runtime. May conflict with an existing VC installation; installation is optional, backed up and not automatically forced.',busy)),
++    note('A full prefix snapshot is made first. Links to external save folders are preserved, not copied. Close Cyberpunk and other Protontricks windows, and do not launch the game or change Proton while this runs. Runtime downloads need internet access.',true),
++    button('Install selected runtimes',()=>run(()=>requestRuntime(false)),busy||!runtimeVerbs.length||!runtimeInfo?.helper?.available||!runtimePrefix||!!runtimeInfo?.blockers?.length,
++      'Review the exact target, dependencies and backup size, then choose Back up & install. Existing mod-loader DLLs and launch overrides remain untouched.'),
++    runtimeInfo?.helper_log&&h('div',{style:ui.box},
++      toggle('Show Protontricks helper log',showHelperLog,setShowHelperLog,'Installation output from the optional Flatpak helper, including failures.'),
++      showHelperLog&&modCard('runtime-helper-log',h('strong',null,'Protontricks helper setup'),code(runtimeInfo.helper_log.path),code(runtimeInfo.helper_log.text))),
++    runtimeInfo?.last&&h('div',{'data-runtime-receipt':true,style:ui.box},
++      h('h3',null,'Last runtime operation'),h('div',null,`Result: ${runtimeInfo.last.state}`),
++      runtimeInfo.last.note&&h('p',null,runtimeInfo.last.note),runtimeInfo.last.error&&note(runtimeInfo.last.error,true),
++      modCard('runtime-paths',h('strong',null,'Retained files'),code({prefix:runtimeInfo.last.prefix,snapshot:runtimeInfo.last.snapshot,log:runtimeInfo.last.log,displaced_prefix:runtimeInfo.last.displaced_prefix})),
++      toggle('Show runtime installation log',showRuntimeLog,setShowRuntimeLog,'Last 16 KB. Full output is retained at the log path, up to the documented size limit.'),
++      showRuntimeLog&&modCard('runtime-log',h('strong',null,'Installer output'),code(runtimeInfo.last.log_tail||'No installer output was recorded.')),
++      h('div',{style:ui.muted},'Installation receipts are evidence, not a game-launch guarantee.')),
++    runtimeInfo?.restore_snapshot?.snapshot_ready&&runtimeInfo.restore_snapshot.state!=='restored'&&button('Restore latest runtime snapshot',()=>run(()=>requestRuntime(true)),busy||!!runtimeInfo.blockers?.length,
++      'Separate confirmation. Restores the latest completed snapshot for the selected prefix and retains today’s pfx alongside it. Prefix-local saves/settings revert; external linked folders are untouched.'),
++    note('Successful runtime installation is not proof that CET, RED4ext or scripts load. Re-extracting mods can overwrite a graphics proxy. Check DLLs and mod logs rather than force-overwriting a loader. Winetricks --force is not used because it can also bypass checksum errors.'),
++    button('Open DLLs and mod diagnostics',()=>setTab('wine'),busy)
++  ):note('Select Cyberpunk2077.exe in Library to use the Cyberpunk runtime workflow. Other games and prefixes are not modified.');
++
+   const tools=section('Components, updates and setup',
+-    note('Deck Fusion 1.2.2. HTTPS uses the SteamOS trust store plus a bundled Mozilla CA fallback, with certificate and hostname verification enabled. No root flag or SteamOS read-only changes.'),
++    note('Deck Fusion 1.3.0. HTTPS uses the SteamOS trust store plus a bundled Mozilla CA fallback, with certificate and hostname verification enabled. No root flag or SteamOS read-only changes.'),
+     note(state.bundled?.complete?'Offline archives are included. Absent components are prepared locally on first open. Existing installed versions are kept.':(state.bundled?.note||`Offline third-party archives are not embedded. Missing components: ${(state.bundled?.missing||[]).join(', ')||'none'}. Tools downloads verified upstream copies on demand; the certificate fallback is included.`),!state.bundled?.complete),
+     ...(state.bundled?.errors||[]).map((message,i)=>h('div',{key:`bundle-error-${i}`},note(message,true))),
+     ...[['lsfg','LSFG'],['opti','OptiScaler'],['reshade','ReShade']].map(([key,label])=>row(h('div',{style:ui.box},h('strong',null,label),h('div',{style:ui.muted},state.packages[key]?`${state.packages[key].version} · ${state.packages[key].source||'existing cache'}`:'Not installed'),updates?.[key]&&h('div',{style:ui.muted},updates[key].error||`Latest available: ${updates[key].version}${updates[key].different?' · update available':' · no version change'}`)),`component-${key}`)),
+@@ -813,7 +932,7 @@
+       !wizardDone&&h('div',{style:{flex:1}},compact('Back',()=>setWizardStep(step=>Math.max(0,step-1)),busy||wizardStep===0)),
+       !wizardDone&&h('div',{style:{flex:1}},compact(wizardStep===4?'Apply this game':'Next',()=>run(async()=>{if(wizardStep===4){if(await requestApply(false))setWizardDone(true);}else await nextWizard();}),busy||!p||(wizardStep===0&&!p.exe)||(wizardStep===3&&!readyComponents)))));
+ 
+-  const tabs=[['library','Library',library],['lsfg','LSFG',lsfg],['opti','OptiScaler',opti],['reshade','ReShade',reshade],['wine','DLLs',winePage],['apply','Apply',applyPage],['tools','Tools',tools]].map(([id,title,content])=>({id,title,content:h('div',{'data-df-scroll':id,onFocusCapture:scrollFocusedControl,style:{height:'100%',minHeight:0,overflowY:'auto',overflowX:'hidden',overscrollBehavior:'contain',scrollPaddingBlock:14,padding:'0 24px 24px',boxSizing:'border-box'}},content)}));
++  const tabs=[['library','Library',library],['lsfg','LSFG',lsfg],['opti','OptiScaler',opti],['reshade','ReShade',reshade],['wine','DLLs',winePage],['runtimes','Runtimes',runtimePage],['apply','Apply',applyPage],['tools','Tools',tools]].map(([id,title,content])=>({id,title,content:h('div',{'data-df-scroll':id,onFocusCapture:scrollFocusedControl,style:{height:'100%',minHeight:0,overflowY:'auto',overflowX:'hidden',overscrollBehavior:'contain',scrollPaddingBlock:14,padding:'0 24px 24px',boxSizing:'border-box'}},content)}));
+   if(!wizard&&!U.Tabs)return h('div',{style:{padding:40}},note('Decky native Tabs is unavailable. Update Decky Loader before using this build.',true));
+   return h('div',{ref:frameRef,'data-df-frame':true,style:{paddingTop:42,height:frameHeight,boxSizing:'border-box',color:'#e8eef5',display:'flex',flexDirection:'column',minWidth:0,overflow:'hidden'}},
+     h('div',{style:{padding:'0 28px 8px',display:'flex',alignItems:'center',justifyContent:'space-between',gap:16,flexShrink:0}},
+@@ -824,9 +943,10 @@
+         wizard&&h('div',{style:ui.muted},'Guided game setup'))),
+     !wizard&&h('div',{style:{padding:'0 28px',fontSize:12,opacity:.65}},'L1 / R1 · tabs'),
+     h('div',{style:{padding:'5px 28px 10px',fontSize:13,lineHeight:1.3,flexShrink:0}},error?h('div',{role:'alert',style:{color:'#ffd597',whiteSpace:'pre-wrap',maxHeight:100,overflowY:'auto'}},error):message,progress!==null&&h('progress',{max:1,value:progress,style:{width:'100%',height:5}})),
++    runtimeJob&&h('div',{style:{padding:'0 28px 8px',flexShrink:0}},h(U.DialogButton||U.ButtonItem,{onClick:cancelRuntime,style:{width:'100%'}},'Cancel runtime operation')),
+     h('div',{style:{flex:1,minHeight:0,overflow:'hidden'}},wizard?wizardView:h(U.Tabs,{tabs,activeTab:tab,onShowTab:next=>{if(!busyRef.current)setTab(next);},autoFocusContents:true})));
+ }
+-function QuickPanel(){return section('Deck Fusion',note('Per-game LSFG, upscaling and ReShade. Configuration opens in a full-screen, controller-friendly view.'),button('Set up a game',()=>{U.Navigation.Navigate(route+'/setup');U.Navigation.CloseSideMenus();}),button('Open Deck Fusion',()=>{U.Navigation.Navigate(route);U.Navigation.CloseSideMenus();}),row(h('div',{style:ui.muted},'1.2.2 · Research-backed installation paths, not a universal game compatibility guarantee.')));}
++function QuickPanel(){return section('Deck Fusion',note('Per-game LSFG, upscaling and ReShade. Configuration opens in a full-screen, controller-friendly view.'),button('Set up a game',()=>{U.Navigation.Navigate(route+'/setup');U.Navigation.CloseSideMenus();}),button('Open Deck Fusion',()=>{U.Navigation.Navigate(route);U.Navigation.CloseSideMenus();}),row(h('div',{style:ui.muted},'1.3.0 · Research-backed installation paths, not a universal game compatibility guarantee.')));}
+ export default function(){
+   api.routerHook.addRoute(route,()=>h(ScreenBoundary,null,h(Manager)));
+   api.routerHook.addRoute(route+'/setup',()=>h(ScreenBoundary,null,h(Manager,{startWizard:true})));

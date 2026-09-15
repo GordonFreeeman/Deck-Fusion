@@ -1,0 +1,46 @@
+{
+  "scope": "Real Chromium/React/Python. Simulated Decky/Steam and runtime installer; no physical Steam Deck, actual Microsoft installer or game/GPU result.",
+  "cases": [
+    {
+      "viewport": [
+        1280,
+        800
+      ],
+      "entry": "Open Deck Fusion",
+      "helper_command_model": "native",
+      "geometry": {
+        "moduleHeight": 0,
+        "height": 688,
+        "bottom": 728,
+        "footerTop": 744,
+        "horizontalOverflow": false
+      },
+      "cancel_readonly": true,
+      "snapshot_installer_fixture": true,
+      "restore_confirmation": true,
+      "launch_options_unchanged": true,
+      "errors": []
+    },
+    {
+      "viewport": [
+        800,
+        500
+      ],
+      "entry": "Set up a game",
+      "helper_command_model": "flatpak",
+      "geometry": {
+        "moduleHeight": 0,
+        "height": 388,
+        "bottom": 428,
+        "footerTop": 444,
+        "horizontalOverflow": false
+      },
+      "cancel_readonly": true,
+      "snapshot_installer_fixture": true,
+      "restore_confirmation": true,
+      "launch_options_unchanged": true,
+      "errors": []
+    }
+  ],
+  "bundle_sha256": "6a4756c7562d880d6acd562b0a25f5197d24546c7e8fd2860c2b5cef0275eac5"
+}

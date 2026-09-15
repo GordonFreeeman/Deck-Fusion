@@ -1,0 +1,13 @@
+{
+  "name": "Deck Fusion",
+  "author": "Deck Fusion contributors",
+  "flags": [],
+  "api_version": 1,
+  "publish": {
+    "tags": [
+      "graphics",
+      "utility"
+    ],
+    "description": "Per-game LSFG, OptiScaler, ReShade, custom DLL overrides, optional Proton runtimes, read-only diagnostics and tracked recovery."
+  }
+}

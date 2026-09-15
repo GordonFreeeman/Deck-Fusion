@@ -1,0 +1,6 @@
+{
+  "input_game": "Test Game",
+  "input_exe": "Test-Win64-Shipping.exe",
+  "prefix_initialized": true,
+  "baseline_failure": "This runtime workflow is for the selected Cyberpunk2077.exe only."
+}

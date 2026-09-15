@@ -1,0 +1,32 @@
+[
+  {
+    "command": "python scripts/build.py",
+    "returncode": 0,
+    "stdout": "Built dist/index.js\n",
+    "stderr": ""
+  },
+  {
+    "command": "python -m pytest tests -q --disable-warnings",
+    "returncode": 0,
+    "stdout": "........................................................................ [ 39%]\n........................................................................ [ 79%]\n......................................                                   [100%]\n182 passed in 7.01s\n",
+    "stderr": ""
+  },
+  {
+    "command": "node --test tests/frontend.test.mjs tests/viewport.test.mjs",
+    "returncode": 0,
+    "stdout": "TAP version 13\n# Subtest: self-contained bundle loads and registers both Decky entry routes\nok 1 - self-contained bundle loads and registers both Decky entry routes\n  ---\n  duration_ms: 8.983706\n  type: 'test'\n  ...\n# Subtest: reads visible owner window while module window height is zero\nok 2 - reads visible owner window while module window height is zero\n  ---\n  duration_ms: 4.814267\n  type: 'test'\n  ...\n# Subtest: uses the owner document viewport fallback\nok 3 - uses the owner document viewport fallback\n  ---\n  duration_ms: 0.93578\n  type: 'test'\n  ...\n# Subtest: retains footer clearance for scaled Steam UI\nok 4 - retains footer clearance for scaled Steam UI\n  ---\n  duration_ms: 0.80089\n  type: 'test'\n  ...\n# Subtest: ignores transitional zero visualViewport dimensions\nok 5 - ignores transitional zero visualViewport dimensions\n  ---\n  duration_ms: 0.92944\n  type: 'test'\n  ...\n# Subtest: invalid, offscreen, detached and hidden geometry never commits zero\nok 6 - invalid, offscreen, detached and hidden geometry never commits zero\n  ---\n  duration_ms: 1.153321\n  type: 'test'\n  ...\n# Subtest: schedules and listens in owner window; missing observer is nonfatal; cleans up\nok 7 - schedules and listens in owner window; missing observer is nonfatal; cleans up\n  ---\n  duration_ms: 1.32297\n  type: 'test'\n  ...\n# Subtest: focus scrolling changes only the pane and works without a same-realm HTMLElement\nok 8 - focus scrolling changes only the pane and works without a same-realm HTMLElement\n  ---\n  duration_ms: 0.92939\n  type: 'test'\n  ...\n1..8\n# tests 8\n# suites 0\n# pass 8\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 79.457739\n",
+    "stderr": ""
+  },
+  {
+    "command": "node --check dist/index.js",
+    "returncode": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "command": "python -m compileall -q main.py py_modules",
+    "returncode": 0,
+    "stdout": "",
+    "stderr": ""
+  }
+]

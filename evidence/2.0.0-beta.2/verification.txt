@@ -1,0 +1,41 @@
+$ python3 scripts/build.py
+Built dist/index.js
+
+$ node --check dist/index.js
+
+$ python3 -m pytest tests -q
+........................................................................ [ 28%]
+........................................................................ [ 56%]
+........................................................................ [ 85%]
+.....................................                                    [100%]
+253 passed in 7.36s
+
+$ node --test tests/dll-selection.test.mjs tests/frontend.test.mjs tests/studio-dom.test.mjs tests/viewport.test.mjs
+✔ normalizes comma-separated DLL basenames and deduplicates (1.32996ms)
+✔ batch addition keeps previous entries and their custom orders (0.294183ms)
+✔ manual multiple names update only explicitly named modules (0.211498ms)
+✔ repeated batches are cumulative, not single-value replacement (0.194592ms)
+✔ blank names, paths, injections and double dots are rejected (0.368545ms)
+✔ self-contained bundle loads and registers both Decky entry routes (7.582603ms)
+✔ all tabs and every settings page retain controls, labels, and keyboard page focus (834.355952ms)
+✔ mouse toggle, slider keyboard adjustment, selection, text save and draft preservation (504.730421ms)
+✔ raw R3 after idle clicks owned modal, refuses foreign overlay, and cleans subscription (652.742506ms)
+✔ measured reader preserves newline-rich diagnostics across pages and resize (423.665901ms)
+✔ compact and narrow mode paginate two controls; missing raw API stays usable (691.063143ms)
+✔ RDNA2 installation toggle is prechecked from profile, can be cleared, and stays cleared across tabs (431.716905ms)
+✔ wizard preparation opt-out immediately recalculates missing dependencies (877.758229ms)
+✔ reads visible owner window while module window height is zero (4.444543ms)
+✔ uses the owner document viewport fallback (0.796417ms)
+✔ retains footer clearance for scaled Steam UI (0.773203ms)
+✔ ignores transitional zero visualViewport dimensions (0.587995ms)
+✔ invalid, offscreen, detached and hidden geometry never commits zero (0.819482ms)
+✔ schedules and listens in owner window; missing observer is nonfatal; cleans up (1.0773ms)
+✔ focus scrolling changes only the pane and works without a same-realm HTMLElement (0.81093ms)
+ℹ tests 20
+ℹ suites 0
+ℹ pass 20
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 5048.084044

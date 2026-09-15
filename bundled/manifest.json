@@ -1,0 +1,5 @@
+{
+  "schema": 1,
+  "components": {},
+  "note": "Third-party executable and ReShade shader payloads are not redistributed inside this ZIP. ReShade explicitly asks distributors not to share its binaries or shader files. Deck Fusion instead downloads approved upstream releases on demand using verified HTTPS, with a bundled CA fallback for SteamOS certificate-store failures."
+}

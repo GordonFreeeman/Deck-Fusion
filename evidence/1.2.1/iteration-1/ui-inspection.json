@@ -1,0 +1,90 @@
+{
+  "scope": "Real Chromium/React and Python RPC/transaction code, synthetic PE files, simulated Decky/Steam APIs. Hidden module window and visible Steam footer. No physical Deck or GPU.",
+  "cases": [
+    {
+      "viewport": [
+        1280,
+        800
+      ],
+      "geometry": {
+        "moduleHeight": 0,
+        "height": 688,
+        "bottom": 728,
+        "footerTop": 744,
+        "bodyScroll": 0,
+        "horizontalOverflow": false
+      },
+      "accept_button": {
+        "x": 646,
+        "y": 581.5,
+        "width": 334,
+        "height": 42
+      },
+      "blocked_to_repair": true,
+      "cancel_read_only": true,
+      "explicit_toggle_apply": true,
+      "toggle_reset": true,
+      "reinstalled_files": 9,
+      "external_snapshot": true,
+      "original_override_and_mod_preserved": true,
+      "page_errors": []
+    },
+    {
+      "viewport": [
+        1024,
+        640
+      ],
+      "geometry": {
+        "moduleHeight": 0,
+        "height": 528,
+        "bottom": 568,
+        "footerTop": 584,
+        "bodyScroll": 0,
+        "horizontalOverflow": false
+      },
+      "accept_button": {
+        "x": 518,
+        "y": 463.09375,
+        "width": 334,
+        "height": 42
+      },
+      "blocked_to_repair": true,
+      "cancel_read_only": true,
+      "explicit_toggle_apply": true,
+      "toggle_reset": true,
+      "reinstalled_files": 9,
+      "external_snapshot": true,
+      "original_override_and_mod_preserved": true,
+      "page_errors": []
+    },
+    {
+      "viewport": [
+        800,
+        500
+      ],
+      "geometry": {
+        "moduleHeight": 0,
+        "height": 388,
+        "bottom": 428,
+        "footerTop": 444,
+        "bodyScroll": 0,
+        "horizontalOverflow": false
+      },
+      "accept_button": {
+        "x": 406,
+        "y": 324.5,
+        "width": 334,
+        "height": 42
+      },
+      "blocked_to_repair": true,
+      "cancel_read_only": true,
+      "explicit_toggle_apply": true,
+      "toggle_reset": true,
+      "reinstalled_files": 9,
+      "external_snapshot": true,
+      "original_override_and_mod_preserved": true,
+      "page_errors": []
+    }
+  ],
+  "bundle_sha256": "20c8666aaa33999a24abf18f90ebf805dcea1d9dd5817c055016772051c792b7"
+}

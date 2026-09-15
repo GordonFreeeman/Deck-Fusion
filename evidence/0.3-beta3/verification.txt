@@ -1,0 +1,64 @@
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+> deck-fusion@0.3.0-beta3 test
+> python3 scripts/build.py && python3 -m pytest tests -q && node --test tests/*.test.mjs
+
+Built dist/index.js
+........................................................................ [ 24%]
+........................................................................ [ 48%]
+........................................................................ [ 72%]
+........................................................................ [ 96%]
+............                                                             [100%]
+300 passed in 7.66s
+✔ normalizes comma-separated DLL basenames and deduplicates (1.8373ms)
+✔ batch addition keeps previous entries and their custom orders (0.413623ms)
+✔ manual multiple names update only explicitly named modules (0.291759ms)
+✔ repeated batches are cumulative, not single-value replacement (0.27845ms)
+✔ blank names, paths, injections and double dots are rejected (0.420293ms)
+✔ self-contained bundle loads and registers guided, expert and compatibility entry routes (9.836528ms)
+✔ all tabs and every settings page retain controls, labels, and keyboard page focus (815.994588ms)
+✔ mouse toggle, slider keyboard adjustment, selection, text save and draft preservation (510.503079ms)
+✔ raw R3 after idle clicks owned modal, refuses foreign overlay, and cleans subscription (656.730504ms)
+✔ measured reader preserves newline-rich diagnostics across pages and resize (422.753828ms)
+✔ compact and narrow mode paginate two controls; missing raw API stays usable (712.206677ms)
+✔ RDNA2 installation toggle is prechecked from profile, can be cleared, and stays cleared across tabs (426.838727ms)
+✔ tab headings are plain names and exit returns to Steam Home (479.624048ms)
+✔ native mouse mode preserves clicks, avoids duplicate raw input, suspends outside Studio, and releases on exit (426.731109ms)
+✔ game and shader pickers use measured compact rows and retain every option through resize (656.776544ms)
+✔ guided setup uses each Next stage, routes ReShade automatically, and keeps the draft (1238.33058ms)
+✔ effects popup keeps all toggles, filters them, and scrolls with right stick without duplicate native clicks (697.014593ms)
+✔ running game wins over remembered selection with backend fallback (659.618367ms)
+✔ guided Apply automates helper and runtimes once, then commits graphics with a verified fresh plan (653.146065ms)
+✔ recorded runtimes are skipped and disabled feature stages disappear (660.650804ms)
+✔ changed plan and failed runtime prevent graphics writes while preserving guided navigation (1303.923758ms)
+✔ missing Lossless Scaling DLL can be resolved without leaving setup (659.757486ms)
+✔ runtime completion never authorizes a changed graphics file plan (619.800144ms)
+✔ moved or ambiguous Proton prefixes stay recoverable inside guided setup (604.745502ms)
+✔ auto API displays engine detection and checks the live renderer before downloads (429.513467ms)
+✔ unknown API remains on target until explicitly selected (509.18521ms)
+✔ unavailable optional shader pack is reported without blocking available effects (531.680935ms)
+✔ required shader failure stays on features and does not silently drop its selection (473.61372ms)
+✔ failed runtime refreshes its receipt and exposes installer output inside setup (649.020075ms)
+✔ helper installation failure exposes its log without starting prefix or graphics work (652.863438ms)
+✔ a shader recovered by the required-dependency retry does not keep an unavailable warning (482.534468ms)
+✔ native Steam scrolling is used without the removed raw-state API and keeps effect focus (641.965576ms)
+✔ legacy right-stick scroll holds until neutral and stops on focus loss (1245.237439ms)
+✔ missing managed files open a force popup; cancellation is inert and force applies the exact plan (706.363708ms)
+✔ force-popup acceptance cannot bypass a newly running game (616.324793ms)
+✔ launch cleanup has a separate warning, retains original for rollback and writes only after Apply (744.974119ms)
+✔ reads visible owner window while module window height is zero (6.12937ms)
+✔ uses the owner document viewport fallback (1.05475ms)
+✔ retains footer clearance for scaled Steam UI (0.94879ms)
+✔ ignores transitional zero visualViewport dimensions (0.90906ms)
+✔ invalid, offscreen, detached and hidden geometry never commits zero (1.237266ms)
+✔ schedules and listens in owner window; missing observer is nonfatal; cleans up (1.585079ms)
+✔ focus scrolling changes only the pane and works without a same-realm HTMLElement (0.963723ms)
+✔ reserves Steam header space at zero origin and avoids double insets on positioned routes (2.72625ms)
+ℹ tests 44
+ℹ suites 0
+ℹ pass 44
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 20575.144663

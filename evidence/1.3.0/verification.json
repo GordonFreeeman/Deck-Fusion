@@ -1,0 +1,138 @@
+{
+  "version": "1.3.0",
+  "review_scope": "Implementation, filesystem/subprocess safeguards and browser rendering. No physical Deck, Microsoft/Proton/Flatpak installation or GPU test.",
+  "backend": {
+    "command": "pytest -q tests/test_130.py tests/test_121.py tests/test_122.py",
+    "passed": 56,
+    "failed": 0,
+    "duration_seconds": 3.41
+  },
+  "frontend": {
+    "command": "node --test tests/*.test.mjs",
+    "passed": 13,
+    "failed": 0
+  },
+  "compilation": {
+    "python": true,
+    "javascript_syntax": true
+  },
+  "browser": {
+    "scope": "Real Chromium/React/Python. Simulated Decky/Steam and runtime installer; no physical Steam Deck, actual Microsoft installer or game/GPU result.",
+    "cases": [
+      {
+        "viewport": [
+          1280,
+          800
+        ],
+        "entry": "Open Deck Fusion",
+        "helper_command_model": "native",
+        "geometry": {
+          "moduleHeight": 0,
+          "height": 688,
+          "bottom": 728,
+          "footerTop": 744,
+          "horizontalOverflow": false
+        },
+        "cancel_readonly": true,
+        "snapshot_installer_fixture": true,
+        "restore_confirmation": true,
+        "launch_options_unchanged": true,
+        "errors": []
+      },
+      {
+        "viewport": [
+          800,
+          500
+        ],
+        "entry": "Set up a game",
+        "helper_command_model": "flatpak",
+        "geometry": {
+          "moduleHeight": 0,
+          "height": 388,
+          "bottom": 428,
+          "footerTop": 444,
+          "horizontalOverflow": false
+        },
+        "cancel_readonly": true,
+        "snapshot_installer_fixture": true,
+        "restore_confirmation": true,
+        "launch_options_unchanged": true,
+        "errors": []
+      }
+    ],
+    "bundle_sha256": "6a4756c7562d880d6acd562b0a25f5197d24546c7e8fd2860c2b5cef0275eac5"
+  },
+  "changed_runtime_files": [
+    {
+      "path": "dist/index.js",
+      "type": "modified"
+    },
+    {
+      "path": "main.py",
+      "type": "modified"
+    },
+    {
+      "path": "package.json",
+      "type": "modified"
+    },
+    {
+      "path": "py_modules/fusion_engine.py",
+      "type": "modified"
+    },
+    {
+      "path": "py_modules/fusion_prereqs.py",
+      "type": "new"
+    },
+    {
+      "path": "py_modules/fusion_runtime.py",
+      "type": "modified"
+    },
+    {
+      "path": "src/index.js",
+      "type": "modified"
+    }
+  ],
+  "unchanged_runtime_files": [
+    "plugin.json",
+    "py_modules/fusion_catalog.py",
+    "py_modules/fusion_downloads.py",
+    "py_modules/fusion_launch.py",
+    "py_modules/fusion_mods.py",
+    "py_modules/fusion_network.py",
+    "py_modules/fusion_policy.py",
+    "py_modules/fusion_shaders.py",
+    "py_modules/fusion_steam.py",
+    "py_modules/fusion_transaction.py",
+    "py_modules/fusion_util.py",
+    "py_modules/fusion_wine.py"
+  ],
+  "code_manifest": {
+    "dist/index.js": "6a4756c7562d880d6acd562b0a25f5197d24546c7e8fd2860c2b5cef0275eac5",
+    "main.py": "2304f9e2368075b2932d9bc33d07c0c04406e2869533c6c9dd9a0f29112a106b",
+    "package.json": "8aec8bf52223bbb631d4e4818c6e31d15cc8774020323a032dfc1d69f6fff18a",
+    "plugin.json": "7662daa287b7faa0dcedb8772de350696669e16820d1e6898962146c2dedf0f3",
+    "py_modules/fusion_catalog.py": "5103acedc88e12b890ad18c808f650b45a96a58e54cf2c1989395253aa8df78c",
+    "py_modules/fusion_downloads.py": "a8e78aa207454c4843b1cba80bf0e641c1fd5985bc5947d46e2145b9be231e20",
+    "py_modules/fusion_engine.py": "f71b84dca9a27e5cb3ce87b355cf86ec84a7e8b102eb31d9cd6ed95dab5d60dc",
+    "py_modules/fusion_launch.py": "9e104edd5c5793bea3b90b9085f4b05bf7c10f5ff3ba6913748fb88647afb430",
+    "py_modules/fusion_mods.py": "77b67f705a5467a9e9a286842dd2c097ef436a5f70079d3a3f45a555aeccb145",
+    "py_modules/fusion_network.py": "3183ee1d35756114164792eb55a2e9e6996fc865959958661533ce5c76e9feb4",
+    "py_modules/fusion_policy.py": "fee55241aa06ebd49ce87fdb4a9d1c9b17fde0d1217f16f0ac7b20d7d54936f9",
+    "py_modules/fusion_prereqs.py": "613806246a383c2fba6e9c6ef2c405be81aa60fcbd669b35ef6e2099d19b2763",
+    "py_modules/fusion_runtime.py": "5bb72dd2c38565eb9891a1f05147abd3764efeba4889612e65ecdb2e62de8f3f",
+    "py_modules/fusion_shaders.py": "079786fc8bc0783967239d50812f418141db5f627d27e3f0260edb8cb31f4d78",
+    "py_modules/fusion_steam.py": "014f13c4ffb483b22205d8c55d2ab3e79f29246d767646fc8cbf6c7adff23c11",
+    "py_modules/fusion_transaction.py": "4a096f4e47f68707f96b7583d5748cb2917047257ea111d5c21b9b776ade1167",
+    "py_modules/fusion_util.py": "be3d49a453eb8228fff80cc1576dbc22fc598b032e55b34e4061509787da7613",
+    "py_modules/fusion_wine.py": "f6c306b0cf22be11dcca7728fc4d2f254dec0efe6211e6eaee40347bc4265cea",
+    "src/index.js": "6a4756c7562d880d6acd562b0a25f5197d24546c7e8fd2860c2b5cef0275eac5"
+  },
+  "excluded_tests": [
+    "Microsoft runtime execution",
+    "Actual Protontricks/Flatpak invocation",
+    "Cyberpunk startup",
+    "Native Decky UI/controller hardware",
+    "GPU and FPS benchmarks",
+    "Live mod loading"
+  ]
+}

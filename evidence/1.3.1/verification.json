@@ -1,0 +1,190 @@
+{
+  "version": "1.3.1",
+  "scope": "General per-game runtime setup and diagnostics; no Cyberpunk runtime restriction.",
+  "backend": {
+    "passed": 231,
+    "failed": 0,
+    "duration_seconds": 11.97,
+    "new_scope_cases": 12,
+    "evidence": "evidence/1.3.1/backend-tests.txt"
+  },
+  "frontend": {
+    "passed": 13,
+    "failed": 0,
+    "evidence": "evidence/1.3.1/node-tests.txt"
+  },
+  "static": {
+    "python_compile": "passed",
+    "javascript_syntax": "passed",
+    "source_equals_bundle": true
+  },
+  "browser": {
+    "scope": "Real Chromium/React/Python, synthetic games and simulated Decky/Steam/installer. No physical Steam Deck or real runtime installation.",
+    "cases": [
+      {
+        "viewport": [
+          1280,
+          800
+        ],
+        "entry": "Open Deck Fusion",
+        "geometry": {
+          "moduleHeight": 0,
+          "height": 688,
+          "bottom": 728,
+          "footerTop": 744,
+          "horizontalOverflow": false
+        },
+        "wizard_resume": false,
+        "cancel_readonly": true,
+        "general_diagnostics": true,
+        "game_switch_resets_runtime_state": true,
+        "native_blocked": true,
+        "simulated_installer_calls": [
+          "d3dcompiler_47",
+          "vcrun2022"
+        ],
+        "launch_options_unchanged": true,
+        "errors": []
+      },
+      {
+        "viewport": [
+          1024,
+          640
+        ],
+        "entry": "Open Deck Fusion",
+        "geometry": {
+          "moduleHeight": 0,
+          "height": 528,
+          "bottom": 568,
+          "footerTop": 584,
+          "horizontalOverflow": false
+        },
+        "wizard_resume": false,
+        "cancel_readonly": true,
+        "general_diagnostics": true,
+        "game_switch_resets_runtime_state": true,
+        "native_blocked": true,
+        "simulated_installer_calls": [],
+        "launch_options_unchanged": true,
+        "errors": []
+      },
+      {
+        "viewport": [
+          800,
+          500
+        ],
+        "entry": "Set up a game",
+        "geometry": {
+          "moduleHeight": 0,
+          "height": 388,
+          "bottom": 428,
+          "footerTop": 444,
+          "horizontalOverflow": false
+        },
+        "wizard_resume": true,
+        "cancel_readonly": true,
+        "general_diagnostics": true,
+        "game_switch_resets_runtime_state": true,
+        "native_blocked": true,
+        "simulated_installer_calls": [],
+        "launch_options_unchanged": true,
+        "errors": []
+      }
+    ],
+    "bundle_sha256": "86c3e950dd5fa8526bf530e945f8e152427a2c3c2a5679d587e74ad9cc60d2a0"
+  },
+  "runtime_safety_audit": {
+    "changed_methods": [
+      "target",
+      "idle",
+      "evidence",
+      "status"
+    ],
+    "unchanged_methods": [
+      "__init__",
+      "user_check",
+      "environment",
+      "_probe",
+      "helper",
+      "validate_prefix",
+      "validate_record",
+      "log_tail",
+      "options",
+      "_plan",
+      "plan",
+      "maintenance_lock",
+      "_save",
+      "snapshot_record",
+      "snapshot_manifest",
+      "filesystem_grants",
+      "_copy_snapshot",
+      "command",
+      "execute",
+      "install",
+      "restore",
+      "exchange",
+      "helper_plan",
+      "install_helper"
+    ],
+    "result": "Installer/confirmation binding/snapshot/restore/helper commands unchanged at AST level; target changed from basename to PE validation. idle/evidence/status changes are user-facing descriptions."
+  },
+  "clean_extracted_code_checks": {
+    "clean_startup": "Clean extracted ZIP startup passed; version 1.3.1, no installed game assumed.",
+    "backend_scope": {
+      "returncode": 0,
+      "output": "............                                                             [100%]\n12 passed in 0.53s"
+    },
+    "frontend": {
+      "returncode": 0,
+      "output": "TAP version 13\n# Subtest: self-contained bundle loads and registers both Decky entry routes\nok 1 - self-contained bundle loads and registers both Decky entry routes\n  ---\n  duration_ms: 8.882961\n  type: 'test'\n  ...\n1..1\n# tests 1\n# suites 0\n# pass 1\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0\n# duration_ms 72.768188"
+    },
+    "js_syntax": {
+      "returncode": 0,
+      "output": ""
+    }
+  },
+  "reviewed_source_sha256": {
+    "main.py": "a5d747bdb90cc37e28c240fede70e1dfe1cefdf179739578972ad761715ef171",
+    "plugin.json": "267968e45b93a41ef28a74a9ac67b56f78cec5cac38c4da0ee7d8de15b95db76",
+    "package.json": "aec3ce0fd033a84897339aa526a6212bd2926593b786bb7e03b57182c24cfd4f",
+    "README.md": "b80630020682d25b99522db354df96eb2ecc4cac1798de04d167c11b338b6227",
+    "src/index.js": "86c3e950dd5fa8526bf530e945f8e152427a2c3c2a5679d587e74ad9cc60d2a0",
+    "dist/index.js": "86c3e950dd5fa8526bf530e945f8e152427a2c3c2a5679d587e74ad9cc60d2a0",
+    "py_modules/fusion_catalog.py": "5103acedc88e12b890ad18c808f650b45a96a58e54cf2c1989395253aa8df78c",
+    "py_modules/fusion_downloads.py": "a8e78aa207454c4843b1cba80bf0e641c1fd5985bc5947d46e2145b9be231e20",
+    "py_modules/fusion_engine.py": "6c8ee7eef91fffbcf1eb075f77112acee87dc73d5947e5591ea934f8238a0a75",
+    "py_modules/fusion_game_diagnostics.py": "755f4a1f4b54d815219d49813398dc83c753cf52816d2cc47a5c1dbb44a0a959",
+    "py_modules/fusion_launch.py": "9e104edd5c5793bea3b90b9085f4b05bf7c10f5ff3ba6913748fb88647afb430",
+    "py_modules/fusion_mods.py": "77b67f705a5467a9e9a286842dd2c097ef436a5f70079d3a3f45a555aeccb145",
+    "py_modules/fusion_network.py": "3183ee1d35756114164792eb55a2e9e6996fc865959958661533ce5c76e9feb4",
+    "py_modules/fusion_policy.py": "fee55241aa06ebd49ce87fdb4a9d1c9b17fde0d1217f16f0ac7b20d7d54936f9",
+    "py_modules/fusion_prereqs.py": "454d87baed58124f13a8259edcb6a62664c11471c0acf9bacab1905b4b201ed8",
+    "py_modules/fusion_runtime.py": "bb2e031d9e15be0ada35ee6f1cfd68ac26f39fddd31972d864fbc8d5210235c4",
+    "py_modules/fusion_shaders.py": "079786fc8bc0783967239d50812f418141db5f627d27e3f0260edb8cb31f4d78",
+    "py_modules/fusion_steam.py": "014f13c4ffb483b22205d8c55d2ab3e79f29246d767646fc8cbf6c7adff23c11",
+    "py_modules/fusion_transaction.py": "4a096f4e47f68707f96b7583d5748cb2917047257ea111d5c21b9b776ade1167",
+    "py_modules/fusion_util.py": "be3d49a453eb8228fff80cc1576dbc22fc598b032e55b34e4061509787da7613",
+    "py_modules/fusion_wine.py": "f6c306b0cf22be11dcca7728fc4d2f254dec0efe6211e6eaee40347bc4265cea"
+  },
+  "reviews": {
+    "logic_inquisitor": {
+      "verdict": "APPROVED",
+      "iterations": 2,
+      "rejections": 1
+    },
+    "aesthetic_executioner": {
+      "verdict": "APPROVED",
+      "iterations": 2,
+      "rejections": 1
+    },
+    "method": "Separate review passes by the same assistant, not independently executed models."
+  },
+  "limitations": [
+    "No physical Steam Deck or live game testing.",
+    "No actual Microsoft installer or Protontricks execution; external installer tests are labeled simulations.",
+    "Decky and Steam browser components are simulated; real React, Chromium and Python backend are used.",
+    "Windows executable and safely resolved initialized Proton prefix required; standalone external Wine runners are not managed.",
+    "Compatibility features remain individually dependent on the game, graphics API, components and runtime."
+  ],
+  "packaging": "Final ZIP CRC, paths, reviewed-code equality and clean startup verified after embedding review. Final archive hash emitted separately to avoid self-reference."
+}

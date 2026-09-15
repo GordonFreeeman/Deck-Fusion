@@ -1,0 +1,45 @@
+$ python3 scripts/build.py
+Built dist/index.js
+
+$ node --check dist/index.js
+
+$ python3 -m pytest tests -q
+........................................................................ [ 28%]
+........................................................................ [ 56%]
+........................................................................ [ 85%]
+.....................................                                    [100%]
+253 passed in 6.92s
+
+$ node --test tests/dll-selection.test.mjs tests/frontend.test.mjs tests/studio-dom.test.mjs tests/viewport.test.mjs
+✔ normalizes comma-separated DLL basenames and deduplicates (1.280114ms)
+✔ batch addition keeps previous entries and their custom orders (0.347181ms)
+✔ manual multiple names update only explicitly named modules (0.730317ms)
+✔ repeated batches are cumulative, not single-value replacement (0.272299ms)
+✔ blank names, paths, injections and double dots are rejected (0.306821ms)
+✔ self-contained bundle loads and registers both Decky entry routes (7.721421ms)
+✔ all tabs and every settings page retain controls, labels, and keyboard page focus (839.224044ms)
+✔ mouse toggle, slider keyboard adjustment, selection, text save and draft preservation (505.214888ms)
+✔ raw R3 after idle clicks owned modal, refuses foreign overlay, and cleans subscription (652.244181ms)
+✔ measured reader preserves newline-rich diagnostics across pages and resize (423.572012ms)
+✔ compact and narrow mode paginate two controls; missing raw API stays usable (693.353084ms)
+✔ RDNA2 installation toggle is prechecked from profile, can be cleared, and stays cleared across tabs (428.114917ms)
+✔ wizard preparation opt-out immediately recalculates missing dependencies (880.773176ms)
+✔ tab headings are plain names and exit returns to Steam Home (473.690262ms)
+✔ native mouse mode preserves clicks, avoids duplicate raw input, suspends outside Studio, and releases on exit (421.85767ms)
+✔ game and shader pickers use measured compact rows and retain every option through resize (649.629444ms)
+✔ reads visible owner window while module window height is zero (4.407262ms)
+✔ uses the owner document viewport fallback (0.888365ms)
+✔ retains footer clearance for scaled Steam UI (0.767534ms)
+✔ ignores transitional zero visualViewport dimensions (0.578359ms)
+✔ invalid, offscreen, detached and hidden geometry never commits zero (0.929817ms)
+✔ schedules and listens in owner window; missing observer is nonfatal; cleans up (1.162667ms)
+✔ focus scrolling changes only the pane and works without a same-realm HTMLElement (0.724488ms)
+✔ reserves Steam header space at zero origin and avoids double insets on positioned routes (3.081209ms)
+ℹ tests 24
+ℹ suites 0
+ℹ pass 24
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 6584.48916
