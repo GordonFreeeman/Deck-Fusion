@@ -20,6 +20,7 @@ You choose a game, enable the features you want, adjust their settings and apply
 ## What you need
 
 You'll need SteamOS, [Decky Loader](https://github.com/SteamDeckHomebrew/decky-loader), an installed game and an internet connection for component downloads.
+Alternatively, download the v0.3-beta5_full version, which comes pre-bundled with everything, except Lossless Scaling of course.
 
 **LSFG requires a purchased copy of Lossless Scaling**, installed on its `lsfg-vk` branch. Deck Fusion looks for its DLL during setup; if automatic detection fails, you can enter the path yourself. The Lossless Scaling DLL is not included in this repository or the release ZIP.
 
