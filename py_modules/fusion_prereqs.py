@@ -25,7 +25,7 @@ import uuid
 
 from fusion_launch import launch_assignments
 from fusion_steam import running_game, steam_roots, libraries, pe_info
-from fusion_util import FusionError, atomic_json, read_json, safe_target, sha256
+from fusion_util import FusionError, atomic_bytes, atomic_json, read_json, safe_target, sha256
 from fusion_wine import inspect_overrides
 
 APP = 'com.github.Matoking.protontricks'
@@ -328,6 +328,35 @@ class PrefixRuntimes:
             else: result[-1]['satisfied'] = name in receipt and any(f['present'] and not f['symlink'] for f in files)
         return result
 
+    def clear_stale_receipts(self, prefix, verb, record, log, progress):
+        """Reset only selected runtime bookkeeping after the full prefix snapshot.
+
+        Winetricks skips a verb when its receipt and one sentinel DLL exist. That
+        does not establish the version or completeness checked by evidence().
+        VC 2015/2017/2019 share the VC14 runtime replaced by vcrun2022; retaining
+        those receipts would block the upgrade before it reaches the installer.
+        DLLs, registry entries and receipts for unrelated components stay intact.
+        """
+        if not record.get('snapshot_ready'):
+            raise FusionError('Runtime receipt repair requires a completed prefix snapshot.')
+        path = safe_target(prefix, 'winetricks.log')
+        if not path.exists(): return
+        if not path.is_file() or path.stat().st_size > 4*1024*1024:
+            raise FusionError('Cannot safely read the Winetricks receipt file. No receipt was replaced.')
+        names = {verb}
+        if verb == 'vcrun2022': names.update(('vcrun2015', 'vcrun2017', 'vcrun2019'))
+        lines = path.read_bytes().splitlines(keepends=True)
+        stale = [line for line in lines if line.strip() in {x.encode('ascii') for x in names}]
+        if not stale: return
+        repaired = sorted({line.strip().decode('ascii') for line in stale})
+        record.setdefault('receipt_repairs', []).append({'runtime': verb, 'removed': repaired})
+        self._save(record)
+        log.parent.mkdir(parents=True, exist_ok=True)
+        with log.open('a') as output:
+            output.write('Repairing stale Winetricks receipts after prefix backup: ' + ', '.join(repaired) + '\n')
+        atomic_bytes(path, b''.join(line for line in lines if line not in stale), stat.S_IMODE(path.stat().st_mode))
+        progress(f'{verb}: repairing the existing runtime installation', .5)
+
     def validate_record(self, record, target, same_prefix=False):
         if (not isinstance(record, dict) or not re.fullmatch('[0-9a-f]{32}', str(record.get('id', ''))) or
             record.get('appid') != target['appid'] or not isinstance(record.get('prefix'), str) or
@@ -594,13 +623,16 @@ class PrefixRuntimes:
                     if any(x['name'] == verb and x.get('satisfied') for x in before):
                         progress(f'{verb}: compatible runtime already installed; skipping', .6)
                         continue
+                    self.clear_stale_receipts(prefix, verb, record, log, progress)
                     cmd, env = self.command(target, plan['helper'], [verb], plan['force_vc'] and verb == 'vcrun2022')
                     self.execute(cmd, env, log, progress, event)
                 record['evidence'] = self.evidence(str(prefix), pe_info(Path(target['exe']))['bits'])
                 receipt_ok = all(x.get('satisfied', x['recorded']) for x in record['evidence'] if x['name'] in plan['runtimes'])
                 record['state'] = 'completed' if receipt_ok else 'completed-unverified'
                 record['note'] = ('Selected runtimes passed installation evidence checks. This does not prove that the game or mods launch.' if receipt_ok else
-                    'The installer returned success, but the runtime DLLs and registered versions could not be verified. A stale Winetricks receipt may have skipped installation. Inspect the log; game/mod loading is unverified.')
+                    'The installer returned success, but these runtimes still failed verification: ' +
+                    ', '.join(x['name'] for x in record['evidence'] if x['name'] in plan['runtimes'] and not x.get('satisfied')) +
+                    '. Stale receipts were repaired where needed. Open Installer log for details; the prefix snapshot is retained.')
                 progress(record['note'], 1)
             except Exception as error:
                 record.update(state='failed', error=str(error)); raise

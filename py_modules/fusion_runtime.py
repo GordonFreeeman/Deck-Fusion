@@ -39,7 +39,7 @@ def main(argv: list[str]) -> int:
         log = root / 'profiles' / argv[1] / 'last-launch.json'
         summary = {'command_executable': command[0], 'settings': {k: env.get(k) for k in (
             'WINEDLLOVERRIDES', 'DECK_FUSION_LSFG', 'LSFGVK_CONFIG', 'DXVK_FRAME_RATE', 'VKD3D_FRAME_RATE', 'PROTON_ENABLE_NVAPI', 'ENABLE_GAMESCOPE_WSI', 'DISABLE_GAMESCOPE_WSI', 'GAMESCOPE_WSI_FRAME_LIMITER_AWARE', 'GAMESCOPE_WAYLAND_DISPLAY', 'GAMESCOPE_LIMITER_FILE', 'MESA_VK_WSI_PRESENT_MODE', 'PROTON_FSR4_INDICATOR', 'FSR4_WATERMARK', 'FSR_WATERMARK', 'MLSR-WATERMARK')}}
-        summary['wrapper_version'] = '0.3-beta5'
+        summary['wrapper_version'] = '0.3-beta6'
         summary['time'] = time.time()
         summary['renderer'] = renderer_note
         if renderer_note: print('Deck Fusion: ' + renderer_note, file=sys.stderr)
