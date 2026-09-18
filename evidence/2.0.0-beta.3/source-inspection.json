@@ -1,8 +1,0 @@
-{
-  "steam_ui_git_blob_sha": "c105af433f2ad6b60cc343808d09d66f94639853",
-  "steam_ui_sha256": "66df1b71aa2f7b7f1b41a704468d9430340825e0fd11b12c99a42e0987229cc0",
-  "basicui_sha256": "82f25d7a90cf2bd11291563d74f287269008514e0f95fa90f56716398d40502e",
-  "native_input_method": "SetWebBrowserActionset",
-  "exit_route": "/library/home",
-  "hardware_tested": false
-}
