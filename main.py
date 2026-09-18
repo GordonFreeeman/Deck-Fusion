@@ -52,7 +52,7 @@ def exposed(function):
 class Plugin:
     async def _main(self):
         self._initialize()
-        LOG.info('Deck Fusion 0.3-beta5 initialized, no root privilege requested.')
+        LOG.info('Deck Fusion 0.3-beta6 initialized, no root privilege requested.')
 
     def _initialize(self):
         if getattr(self, '_engine', None) is not None: return

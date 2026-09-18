@@ -1,3 +1,18 @@
+# v0.3-beta6 verification
+
+This release repairs stale runtime receipts that could stop Apply before launch-option replacement, and changes how the app opens and exits Steam's navigation history. Verified by the primary agent; no new independent review is claimed.
+
+- 333 Python tests passed. Eight new cases cover stale VC 2022/2015/2017/2019 receipts, healthy existing runtimes, unrelated receipts, linked-file rejection and restoring the original prefix after a failed installer.
+- 50 frontend tests passed, with none skipped. The combined Apply test repairs a stale runtime, refreshes its plan and writes the approved replacement once, keeping the original launch text for rollback. The navigation test opens and closes the compiled plugin three times without leaving it in the simulated Back history; the recovery exit uses the same replacement path.
+- Prefix snapshots finish before receipt repair. Compatible runtimes remain untouched. The installer keeps checksum verification enabled, and failed native-DLL verification still blocks graphics changes.
+- Steam's extracted client source confirms the second Navigate argument selects history replacement. Both entering and exiting use it, avoiding an extra Home entry on every visit.
+
+The full test logs and navigation contract record are in `evidence/0.3-beta6/`. The packaging script checks ZIP CRCs, path safety, source hashes and source/bundle parity.
+
+Runtime installers were simulated, and the UI tests use React/jsdom with simulated Steam/Decky interfaces. Actual Proton installation, game injection and the physical Steam Deck B button remain unverified. Entries already left in Steam history by an older plugin version are not erased; the new entry and exit handling prevents creating them during subsequent visits.
+
+Earlier verification records follow below.
+
 > Beta5 updates the README, DLL injection help text and version labels. The beta4 test results below describe the underlying implementation; the beta5 bundle and archive were rebuilt and checked separately.
 
 # v0.3-beta4 verification

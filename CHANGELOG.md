@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.3-beta6
+
+- Repair stale Winetricks receipts after the prefix backup so they cannot skip or block the selected runtime installation. Keep unrelated receipts and verify the resulting runtime before applying graphics settings.
+- Complete approved launch-option replacement after runtime repair, retaining the original launch text for rollback.
+- Replace the current Steam navigation entry when opening and closing Deck Fusion. This prevents the closed app from reopening through the Home screen's Back action.
+- Apply both fixes to the standard and full distributions. Full-bundle dependency versions are unchanged.
+
 ## v0.3-beta5
 
 - Add the DLL filename troubleshooting note to guided setup.

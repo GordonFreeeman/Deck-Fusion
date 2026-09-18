@@ -6,7 +6,7 @@ I wanted to use frame generation, better upscaling and a few ReShade effects on 
 
 You choose a game, enable the features you want, adjust their settings and apply. Each game keeps its own configuration, so you can use a different combination for Cyberpunk, The Witcher 3 or Baldur's Gate 3 without starting from scratch every time.
 
-**Current version: v0.3-beta5.** Cyberpunk 2077, The Witcher 3 and Baldur's Gate 3 have been set up successfully during development. That isn't a compatibility guarantee for every game, and the project is still in beta.
+**Current version: v0.3-beta6.** Cyberpunk 2077, The Witcher 3 and Baldur's Gate 3 have been set up successfully during development. That isn't a compatibility guarantee for every game, and the project is still in beta.
 
 ## What it does
 
@@ -20,7 +20,6 @@ You choose a game, enable the features you want, adjust their settings and apply
 ## What you need
 
 You'll need SteamOS, [Decky Loader](https://github.com/SteamDeckHomebrew/decky-loader), an installed game and an internet connection for component downloads.
-Alternatively, download the v0.3-beta5_full version, which comes pre-bundled with everything, except Lossless Scaling of course.
 
 **LSFG requires a purchased copy of Lossless Scaling**, installed on its `lsfg-vk` branch. Deck Fusion looks for its DLL during setup; if automatic detection fails, you can enter the path yourself. The Lossless Scaling DLL is not included in this repository or the release ZIP.
 
@@ -28,7 +27,7 @@ OptiScaler needs a compatible 64-bit Windows game with a supported upscaler inpu
 
 ## Installation
 
-1. Download `Deck-Fusion-v0.3-beta5.zip` from this repository's **Releases**. Use the plugin ZIP rather than GitHub's automatically generated source archive.
+1. Download `Deck-Fusion-v0.3-beta6.zip` from this repository's **Releases**. Use the plugin ZIP rather than GitHub's automatically generated source archive.
 2. Open Decky Loader's settings, enable developer mode if necessary, and install the plugin from the ZIP.
 3. Open Deck Fusion in the Decky sidebar, then select **Open Deck Fusion**.
 
@@ -36,7 +35,7 @@ You can install an update over the existing plugin to keep your profiles and bac
 
 ## Setting up a game
 
-The setup walks you through the game executable and graphics API, feature selection, DLL injection, ReShade effects, optional runtimes, performance settings and a final review. Each screen has **Next** and **Back** buttons, and sections you don't need are skipped. If a game is already running when you open Deck Fusion, it will be preselected.
+The setup walks you through the game executable and graphics API, feature selection, DLL injection, ReShade effects, optional runtimes, performance settings and a final review. Each screen has **Next** and **Back** buttons, and sections you don't need are skipped. If a game is already running when you open Deck Fusion, it will be preselected. Closing the app returns to Steam Home and replaces its navigation entry, so pressing B does not reopen Deck Fusion.
 
 Make sure you've selected the actual game executable rather than its launcher. You can edit settings while the game is running, but close it before applying file or runtime changes. If runtime setup cannot find a Proton prefix, launch the game through Steam once, close it and try again.
 
@@ -57,6 +56,8 @@ In game, **Insert** opens OptiScaler and **Home** opens ReShade. You can bind th
 ## Runtime errors and repairs
 
 The runtime step is optional. Deck Fusion checks for a compatible existing Visual C++ installation before trying to install it again, including installations made by Steam that have no Winetricks receipt. For `vcrun2022`, it uses an included, pinned Winetricks recipe through the game's Protontricks runner, with download checksum verification enabled.
+
+If Winetricks says a selected runtime is already installed but its files are missing, incomplete or too old, Deck Fusion removes the stale receipt after backing up the prefix and runs the installer again. When upgrading to `vcrun2022`, this also clears older VC 2015, 2017 and 2019 receipts that would block it. Other components' receipts are kept, and the installed runtime must still pass verification before the graphics settings are applied.
 
 If an installation fails, open **Installer log** from the runtime or review screen to see the actual error. Deck Fusion keeps a backup of the prefix before installation and stops the graphics installation if the selected runtimes cannot be verified. Protontricks and its dependencies can be updated through Discover.
 
@@ -104,7 +105,7 @@ python3 scripts/hash_manifest.py
 python3 scripts/package.py
 ```
 
-The package script writes the release ZIP and its SHA-256 file beside the source directory. It checks the archive's integrity and that the compiled frontend matches the source. Public versions use `v0.3-beta5`; the package metadata uses `0.3.0-beta5`.
+The package script writes the release ZIP and its SHA-256 file beside the source directory. It checks the archive's integrity and that the compiled frontend matches the source. Public versions use `v0.3-beta6`; the package metadata uses `0.3.0-beta6`.
 
 The backend and interface tests use simulated game files and Steam/Decky services. They cover configuration, installation transactions and UI behavior, but cannot establish game compatibility or GPU performance. Previous test results and their limits are documented in [the verification record](agent-review.md).
 
