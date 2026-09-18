@@ -1,0 +1,11 @@
+{
+  "source": "https://raw.githubusercontent.com/SteamTracking/SteamTracking/master/ClientExtracted/steamui/chunk~2dcc5aaf7.js",
+  "sha256": "66df1b71aa2f7b7f1b41a704468d9430340825e0fd11b12c99a42e0987229cc0",
+  "observed_date": "2026-09-15",
+  "navigation": "Steam WindowRouter.Navigate(path, replace=false, matchOnly=false, state) selects history.replace when the second argument is true.",
+  "decky_bridge": "The Decky Navigation wrapper forwards every supplied argument to the focused Steam window router.",
+  "home_back": "Steam attempts history.goBack and opens its main menu fallback if no popstate event occurs.",
+  "change": "Use Navigate(path, true) for sidebar entry, normal exit, setup completion and the recovery-screen exit. Avoid growing the history on each visit.",
+  "verification": "Actual compiled-plugin handlers tested with React/jsdom and a simulated history, including three repeated visits and input-actionset cleanup.",
+  "limit": "The Steam client and physical controller were not executed here. Existing entries left by earlier plugin versions are not erased."
+}
