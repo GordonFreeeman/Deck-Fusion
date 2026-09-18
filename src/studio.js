@@ -1,11 +1,15 @@
-/* Deck Fusion Studio v0.3-beta5. Local UI only; all mutations use the existing Manager. */
+/* Deck Fusion Studio v0.3-beta6. Local UI only; all mutations use the existing Manager. */
 const STUDIO_TABS=[
  ['library','Library','grid'], ['lsfg','Motion','wave'],
  ['opti','Upscaling','layers'], ['reshade','ReShade','spark'],
  ['wine','DLLs','link'], ['runtimes','Runtimes','cube'],
  ['apply','Apply','check'], ['tools','Tools','tool']
 ];
-function exitStudio(){U.Navigation.Navigate('/library/home');U.Navigation.CloseSideMenus?.();}
+// Steam WindowRouter.Navigate(path, replace) forwards the second argument to
+// its router history. Use a temporary entry on both open and close, otherwise
+// B on Home navigates back into the plugin that was just closed.
+function openStudio(){U.Navigation.Navigate(route,true);U.Navigation.CloseSideMenus?.();}
+function exitStudio(){U.Navigation.Navigate('/library/home',true);U.Navigation.CloseSideMenus?.();}
 function studioIcon(name,size=20){
  const paths={grid:'M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z',wave:'M2 12h3l3-8 5 16 3-8h6',layers:'m12 3 10 5-10 5L2 8z M2 12l10 5 10-5 M2 16l10 5 10-5',spark:'m12 2 3 7 7 3-7 3-3 7-3-7-7-3 7-3z',link:'M10 14a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-2 2 M14 10a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l2-2',cube:'m12 2 9 5v10l-9 5-9-5V7z M3 7l9 5 9-5 M12 12v10',check:'m5 12 4 4L19 6',tool:'m14 6 4 4 3-3a7 7 0 0 1-9 9l-7 6-3-3 6-7a7 7 0 0 1 9-9z',arrow:'m9 5 7 7-7 7',back:'m15 5-7 7 7 7',info:'M12 11v6 M12 7h.01 M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0',close:'m6 6 12 12 M18 6 6 18',search:'M21 21l-5-5 M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0',fusion:'M5 3h15v4H9v4h8v4H9v6H5z'};
  return h('svg',{width:size,height:size,viewBox:'0 0 24 24',fill:'none',stroke:'currentColor',strokeWidth:1.6,strokeLinecap:'round',strokeLinejoin:'round','aria-hidden':true},h('path',{d:paths[name]||paths.grid}));
@@ -231,7 +235,7 @@ function Studio({frameRef,frameHeight,tabs,tab,setTab,p,dirty,busy,message,error
  const pageTitle=index=>controls[index*pageSize]?.label||'Overview';
  const notesText=inventory.notes.map((x,i)=>`${String(i+1).padStart(2,'0')} / ${x.warning?'COMPATIBILITY':'INFORMATION'}\n${x.text}`).join('\n\n');
  return h(U.Focusable,{ref:frameRef,'data-df-frame':true,'data-df-studio':true,'data-short':short,'data-narrow':narrow,'data-motion':motion,className:'df-studio',style:{height:frameHeight},onButtonDown:navEvent,onCancel:e=>{e?.stopPropagation?.();if(overlay)close();else exitStudio();},'flow-children':'column'},h('style',null,studioCSS),h('div',{className:'df-atmosphere'}),
-  h('header',{className:'df-top'},h('div',{className:'df-brand'},h('span',{className:'df-logo'},studioIcon('fusion',23)),'Deck Fusion'),h('span',{className:'df-beta'},'v0.3-beta5'),h('div',{className:'df-game'},h('span',{className:'df-eyebrow'},'Active game'),h('strong',{title:p?.name},p?.name||'Select a game'),h('span',{className:dirty?'df-dirty':'df-eyebrow'},dirty?'● Unapplied changes':'Saved configuration')),
+  h('header',{className:'df-top'},h('div',{className:'df-brand'},h('span',{className:'df-logo'},studioIcon('fusion',23)),'Deck Fusion'),h('span',{className:'df-beta'},'v0.3-beta6'),h('div',{className:'df-game'},h('span',{className:'df-eyebrow'},'Active game'),h('strong',{title:p?.name},p?.name||'Select a game'),h('span',{className:dirty?'df-dirty':'df-eyebrow'},dirty?'● Unapplied changes':'Saved configuration')),
    h(StudioButton,{className:'df-icon df-motion-control',onClick:()=>{const next=!motion;setMotion(next);try{sessionStorage.setItem('deck-fusion-motion',next?'on':'off');}catch{}},'aria-label':motion?'Pause interface animation':'Enable interface animation'},studioIcon('spark',16)),
    h(StudioButton,{className:'df-primary',disabled:busy||!p,onClick:onApply},studioIcon('check',16),narrow?'Apply':'Review & apply'),h(StudioButton,{className:'df-icon',onClick:()=>exitStudio(),'aria-label':'Back to Steam'},studioIcon('close',18))),
   h('div',{className:'df-body'},h('nav',{className:'df-nav','aria-label':'Configuration tabs'},h('div',{className:'df-eyebrow df-nav-label'},'Expert Mode'),...STUDIO_TABS.map(([id,label,icon])=>h(StudioButton,{key:id,className:'df-nav-button','data-active':tab===id,'aria-label':label,'aria-current':tab===id?'page':undefined,disabled:busy,onClick:()=>setTab(id)},studioIcon(icon,18),h('span',null,label))),null),
