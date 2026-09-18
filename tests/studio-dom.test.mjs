@@ -16,7 +16,7 @@ const source=fs.readFileSync(new URL('../dist/index.js',import.meta.url),'utf8')
 let JSDOM,React,ReactDOM;
 if(modules){const req=createRequire(path.resolve(modules,'package.json'));({JSDOM}=req('jsdom'));const bootstrap=new JSDOM('<!doctype html><body></body>');global.window=bootstrap.window;global.document=bootstrap.window.document;Object.defineProperty(global,'navigator',{value:bootstrap.window.navigator,configurable:true});React=req('react');ReactDOM=req('react-dom/client');}
 const settle=async(ms=15)=>{await new Promise(r=>setTimeout(r,ms));};
-async function host({width=1280,height=800,raw=true,native=false,rdna2Fix=false,guided=false,prepare=null,nativeScroll=false,initialLaunch='--skip-launcher'}={}){
+async function host({width=1280,height=800,raw=true,native=false,rdna2Fix=false,guided=false,prepare=null,nativeScroll=false,initialLaunch='--skip-launcher',launchFromSidebar=false}={}){
  const dom=new JSDOM('<!doctype html><div id="root"></div><div id="modal"></div>',{url:'https://deck-fusion.test',pretendToBeVisual:true,runScripts:'outside-only'}),w=dom.window;
  global.window=w;global.document=w.document;Object.defineProperty(global,'navigator',{value:w.navigator,configurable:true});
  Object.defineProperty(w,'innerWidth',{value:width,writable:true});Object.defineProperty(w,'innerHeight',{value:height,writable:true});w.document.hasFocus=()=>true;
@@ -26,6 +26,8 @@ async function host({width=1280,height=800,raw=true,native=false,rdna2Fix=false,
  let hit=null;w.document.elementFromPoint=()=>hit||w.document.querySelector('[data-df-studio]');
  const h=React.createElement,routes=new Map(),calls=[],listeners=[],rawState={callback:null,unregistered:false,nativeCalls:[]},routeLog=[];
  const root=ReactDOM.createRoot(w.document.querySelector('#root')),modal=ReactDOM.createRoot(w.document.querySelector('#modal'));
+ const history={entries:['/library/home'],index:0,mainMenuOpens:0};
+ const renderRoute=to=>{routeLog.push(to);const Route=routes.get(to);root.render(Route?h(Route):h('div',null,'Steam Home'));};
  const fields={
   PanelSection:({title,children})=>h('section',null,h('h3',null,title),children),PanelSectionRow:({children})=>h('div',null,children),
   ButtonItem:({children,onClick,disabled})=>h('button',{onClick,disabled},children),DialogButton:({children,...props})=>h('button',props,children),
@@ -33,7 +35,7 @@ async function host({width=1280,height=800,raw=true,native=false,rdna2Fix=false,
   Focusable:React.forwardRef(({children,onActivate,onCancel,onButtonDown,focusClassName,focusWithinClassName,...props},ref)=>h('div',{...props,ref:el=>{if(el){el.__activate=onActivate;el.__cancel=onCancel;el.__button=onButtonDown;}if(typeof ref==='function')ref(el);else if(ref)ref.current=el;}},children)),
   ConfirmModal:p=>h('div',{role:'dialog'},h('h2',null,p.strTitle),p.children,h('button',{onClick:p.onCancel},'Cancel'),h('button',{disabled:p.bOKDisabled,onClick:p.onOK},p.strOKButtonText)),
   showModal(element){const close=()=>modal.render(null);modal.render(React.cloneElement(element,{closeModal:close}));return {Close:close};},
-  Navigation:{Navigate:to=>{routeLog.push(to);const Route=routes.get(to);root.render(Route?h(Route):h('div',null,'Steam Library'));},CloseSideMenus(){}},staticClasses:{}
+  Navigation:{Navigate:(to,replace=false)=>{if(replace)history.entries[history.index]=to;else{history.entries.splice(history.index+1);history.entries.push(to);history.index++;}renderRoute(to);},NavigateBack(){if(history.index>0)renderRoute(history.entries[--history.index]);else history.mainMenuOpens++;},CloseSideMenus(){}},staticClasses:{}
  };
  const scrollBridge={element:null,direction:null};
  if(nativeScroll){
@@ -49,12 +51,14 @@ async function host({width=1280,height=800,raw=true,native=false,rdna2Fix=false,
  let liveLaunch=initialLaunch;
  Object.assign(w,{SP_REACT:React,DFL:fields,SteamClient:{Apps:{RegisterForAppDetails:(id,cb)=>{listeners.push(cb);cb({strLaunchOptions:liveLaunch});return {unregister(){}};},SetAppLaunchOptions:(id,value)=>{liveLaunch=value;listeners.forEach(cb=>cb({strLaunchOptions:value}));}},Input:{...(raw?{RegisterForControllerStateChanges:cb=>{rawState.callback=cb;return {unregister:()=>{rawState.callback=null;rawState.unregistered=true;}}}}:{}),...(native?{SetWebBrowserActionset:enabled=>rawState.nativeCalls.push(enabled)}:{})}},__DECKY_SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED_deckyLoaderAPIInit:{connect:()=>api}});
  w.eval(source+'\nwindow.__studio={studioInventory,useMeasuredPages,StudioReviewContent,StudioOverlay,StudioButton,StudioField,SetupStudio,EffectPicker,setupEffects,setupSteps,startupGame,sameGuidedGraphicsPlan};');
- const plugin=w.__makePlugin();root.render(plugin.content);await settle();fields.Navigation.Navigate(guided?'/deck-fusion':'/deck-fusion/expert');await settle(280);
+ const plugin=w.__makePlugin();
+ const openSidebar=async()=>{root.render(plugin.content);await settle();[...w.document.querySelectorAll('button')].find(e=>e.textContent==='Open Deck Fusion').click();await settle(280);};
+ if(launchFromSidebar)await openSidebar();else{root.render(plugin.content);await settle();fields.Navigation.Navigate(guided?'/deck-fusion':'/deck-fusion/expert');await settle(280);}
  const el=(label)=>[...w.document.querySelectorAll('[data-df-focus],button')].find(e=>e.getAttribute('aria-label')===label||e.textContent===label);
  const click=async label=>{const e=el(label);assert.ok(e,`Missing ${label}`);e.click();await settle();return e;};
  const key=async(name,target=w.document.activeElement)=>{target.dispatchEvent(new w.KeyboardEvent('keydown',{key:name,bubbles:true,cancelable:true}));await settle();};
  const close=async()=>{root.unmount();modal.unmount();await settle();w.close();};
- return {w,root,modal,fields,fixtures,calls,rawState,routeLog,jobResults,scrollBridge,el,click,key,close,setHit:e=>hit=e};
+ return {w,root,modal,fields,fixtures,calls,rawState,routeLog,history,openSidebar,jobResults,scrollBridge,el,click,key,close,getLaunch:()=>liveLaunch,setHit:e=>hit=e};
 }
 test('all tabs and every settings page retain controls, labels, and keyboard page focus',{skip},async()=>{
  const t=await host();try{
@@ -113,6 +117,18 @@ test('tab headings are plain names and exit returns to Steam Home',{skip},async(
  const t=await host();try{
   for(const name of ['Library','Motion','Upscaling','ReShade','DLLs','Runtimes','Apply','Tools']){await t.click(name);assert.equal(t.w.document.querySelector('.df-hero h1').textContent,name);assert.equal(t.w.document.querySelector('.df-hero p'),null);}
   await t.click('Back to Steam');assert.equal(t.routeLog.at(-1),'/library/home');
+ }finally{await t.close();}
+});
+test('repeated sidebar visits replace the route so Home Back opens its menu instead of Deck Fusion',{skip},async()=>{
+ const t=await host({guided:true,launchFromSidebar:true,native:true});try{
+  for(let visit=0;visit<3;visit++){
+   assert.equal(setupStep(t),'game');assert.deepEqual(t.history.entries,['/deck-fusion']);
+   await t.click('Exit to Steam Home');
+   assert.deepEqual(t.history.entries,['/library/home']);assert.equal(t.rawState.nativeCalls.at(-1),false);
+   t.fields.Navigation.NavigateBack();await settle();
+   assert.equal(t.history.mainMenuOpens,visit+1);assert.equal(setupStep(t),undefined);
+   if(visit<2)await t.openSidebar();
+  }
  }finally{await t.close();}
 });
 test('native mouse mode preserves clicks, avoids duplicate raw input, suspends outside Studio, and releases on exit',{skip},async()=>{
@@ -535,5 +551,32 @@ test('launch cleanup has a separate warning, retains original for rollback and w
   const writes=t.calls.filter(x=>x.method==='start_job'&&x.args[0]==='prepare');assert.equal(writes.length,1);
   assert.equal(writes[0].args[1].launch_actual,old);assert.equal(writes[0].args[1].launch,'%command% --skip-launcher');
   assert.equal(writes[0].args[1].force_repair,true);
+ }finally{await t.close();}
+});
+
+test('repairing a stale VC receipt completes the approved launch replacement in the same Apply',{skip},async()=>{
+ const old='WINEDLLOVERRIDES="version,winmm=n,b" ~/LSFG %command% --skip-launcher';
+ const replacement='/app/launcher 123 -- %command% --skip-launcher';
+ let installed=false;
+ const t=await host({guided:true,initialLaunch:old,prepare:ctx=>{
+  ctx.profile.setup={version:1,runtimes:['vcrun2022'],runtime_prefix:''};runtimeFixtures(ctx);
+  ctx.jobResults.runtime_status=()=>({prefix:'/compat/123/pfx',prefixes:['/compat/123/pfx'],helper:{available:true},blockers:[],runtimes:[{name:'vcrun2022',recorded:true,satisfied:installed}]});
+  const install=ctx.jobResults.runtime_install,plan=ctx.jobResults.plan;
+  ctx.jobResults.runtime_install=()=>{installed=true;return {...install(),receipt_repairs:[{runtime:'vcrun2022',removed:['vcrun2022']}]};};
+  ctx.jobResults.plan=payload=>({...plan(payload),launch_after:replacement});
+  ctx.jobResults.prepare=payload=>({token:'graphics-token',launch_after:replacement});
+  ctx.fixtures.launch_cleanup=({launch})=>({before:launch,cleaned:'%command% --skip-launcher',after:replacement,removed:['version,winmm=n,b','~/LSFG'],warnings:[]});
+ }});
+ try{
+  await reachReview(t,true);assert.ok(t.el('Replace launch options'));
+  assert.equal(t.getLaunch(),old);assert.equal(jobs(t).includes('runtime_install'),false);
+  await t.click('Replace launch options');await settle(40);
+  assert.equal(t.getLaunch(),old);assert.equal(jobs(t).includes('runtime_install'),false);
+  await t.click('Apply this game');await settle(100);
+  const writes=t.calls.filter(x=>x.method==='start_job'&&['runtime_install','prepare'].includes(x.args[0]));
+  assert.deepEqual(writes.map(x=>x.args[0]),['runtime_install','prepare']);
+  assert.equal(writes[1].args[1].launch_actual,old);assert.equal(writes[1].args[1].launch,'%command% --skip-launcher');
+  assert.equal(writes[1].args[1].approval,'after-runtime');assert.equal(t.getLaunch(),replacement);
+  assert.equal(t.w.document.querySelector('[data-setup-done]').dataset.setupDone,'true');
  }finally{await t.close();}
 });

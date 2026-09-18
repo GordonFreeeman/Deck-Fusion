@@ -7,7 +7,7 @@ test('self-contained bundle loads and registers guided, expert and compatibility
   globalThis.window=globalThis;
   globalThis.SP_REACT={Component:class {},createElement:(type,props,...children)=>({type,props,children}),useState(){},useEffect(){},useRef(){}};
   const navigation=[];
-  globalThis.DFL={staticClasses:{Title:'Title'},Navigation:{Navigate:path=>navigation.push(path),CloseSideMenus(){}}};
+  globalThis.DFL={staticClasses:{Title:'Title'},Navigation:{Navigate:(path,replace)=>navigation.push({path,replace}),CloseSideMenus(){}}};
   globalThis.__DECKY_SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED_deckyLoaderAPIInit={connect:()=>({routerHook:{addRoute:(key,value)=>routes.set(key,value),removeRoute:key=>routes.delete(key)}})};
   const source=await readFile(new URL('../dist/index.js',import.meta.url),'utf8');
   assert.doesNotMatch(source,/^import\s/m,'No unresolved package or source imports');
@@ -19,8 +19,13 @@ test('self-contained bundle loads and registers guided, expert and compatibility
   const sidebar=plugin.content.type();
   assert.match(text(sidebar),/Open Deck Fusion/);assert.doesNotMatch(text(sidebar),/Expert Mode|Set up a game/);
   sidebar.children[0].children[0].props.onClick();
-  assert.deepEqual(navigation,['/deck-fusion']);
+  assert.deepEqual(navigation,[{path:'/deck-fusion',replace:true}]);
   assert.equal(routes.get('/deck-fusion')().children[0].props.startWizard,true);
   assert.notEqual(routes.get('/deck-fusion/expert')().children[0].props?.startWizard,true);
+  const Recovery=routes.get('/deck-fusion')().type,recovery=new Recovery({});
+  recovery.state={error:'Test error'};
+  const fallback=recovery.render(),back=fallback.children.at(-1).children.at(-1);
+  assert.equal(text(back),'Back to Steam');back.props.onClick();
+  assert.deepEqual(navigation.at(-1),{path:'/library/home',replace:true});
   plugin.onDismount();assert.equal(routes.size,0);
 });
