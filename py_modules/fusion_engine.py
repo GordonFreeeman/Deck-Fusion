@@ -860,7 +860,7 @@ class Engine:
 
     def diagnostics(self, appid=''):
         status = self.packages.status()
-        result = {'version':'0.3-beta10','data':str(self.data),'home':str(self.home),
+        result = {'version':'0.3-beta12','data':str(self.data),'home':str(self.home),
                   'packages':status,'legacy_layers':self.old_layers(),
                   'settings':self.settings(), 'bundled':self.packages.bundle_status(),
                   'https':tls_context()[1], 'last_error':read_json(self.data/'last-error.json',None),

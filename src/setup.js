@@ -50,7 +50,7 @@ function useEffectListScroll(listRef,nativeScroll=false){
   const el=listRef.current,doc=el?.ownerDocument,view=doc?.defaultView;if(!el||!view)return;
   const wheel=event=>{
    const scope=el.closest('[data-df-overlay]');
-   if(!el.isConnected||doc.visibilityState==='hidden'||(doc.hasFocus&&!doc.hasFocus())||!scope||event.ctrlKey)return;
+   if(studioKeyboardOwnsInput(el.closest('[data-df-overlay]'))||!el.isConnected||doc.visibilityState==='hidden'||(doc.hasFocus&&!doc.hasFocus())||!scope||event.ctrlKey)return;
    const active=doc.activeElement;
    if(active!==doc.body&&!scope.contains(active))return;
    const pixels=event.deltaY*(event.deltaMode===1?32:event.deltaMode===2?el.clientHeight:1);
@@ -64,7 +64,7 @@ function useEffectListScroll(listRef,nativeScroll=false){
   const tick=now=>{if(disposed)return;const dt=Math.min(32,now-last||16);last=now;let y=0;
    if(now-Number(el.dataset.dfRawScroll||-Infinity)>=180){try{for(const pad of view.navigator.getGamepads?.()||[]){if(pad?.connected&&pad.mapping==='standard'&&Math.abs(pad.axes[3]||0)>.2){y=pad.axes[3];break;}}}catch{}}
    const scope=el.closest('[data-df-overlay]');
-   if(doc.visibilityState!=='hidden'&&(!doc.hasFocus||doc.hasFocus())&&el.isConnected&&(scope?.contains(doc.activeElement)||doc.activeElement===doc.body)&&y){el.scrollTop+=y*dt*.65;}
+   if(!studioKeyboardOwnsInput(scope)&&doc.visibilityState!=='hidden'&&(!doc.hasFocus||doc.hasFocus())&&el.isConnected&&(scope?.contains(doc.activeElement)||doc.activeElement===doc.body)&&y){el.scrollTop+=y*dt*.65;}
    raf=view.requestAnimationFrame(tick);
   };raf=view.requestAnimationFrame(tick);
   return()=>{disposed=true;removeWheel();if(raf!==null)view.cancelAnimationFrame(raf);};
@@ -76,7 +76,7 @@ function EffectPicker({effects,selected,toggle,close,catalogIssue}){
  const dialogFocus=useStudioDialogFocus(root);
  useEffect(()=>{(studioFocusable(list.current)[0]||studioFocusable(root.current)[0])?.focus({preventScroll:true});},[]);
  const matches=effects.filter(x=>`${x.name} ${x.file} ${x.pack}`.toLowerCase().includes(query.toLowerCase()));
- return h(U.Focusable,{ref:root,...dialogFocus,className:'df-overlay','data-df-overlay':true,role:'dialog','aria-modal':true,'aria-label':'ReShade effects',onCancel:e=>{e?.stopPropagation?.();close();}},
+ return h(U.Focusable,{ref:root,...dialogFocus,className:'df-overlay','data-df-overlay':true,role:'dialog','aria-modal':true,'aria-label':'ReShade effects',onCancel:e=>{if(studioKeyboardOwnsInput(root.current))return;e?.stopPropagation?.();close();}},
   h('div',{className:'df-overlay-head'},h('h2',null,'ReShade effects'),h(StudioButton,{'aria-label':'Close effects',onClick:close,className:'df-icon'},studioIcon('close'))),
   h('input',{'aria-label':'Search effects',placeholder:'Search effects…',value:query,onChange:e=>setQuery(e.target.value)}),
   h('div',{className:'df-subtle'},`${selected.length} enabled · ${matches.length} available · Right stick / touch to scroll`),
@@ -91,12 +91,12 @@ function SetupPrompt({model,busy,confirm,secondary,cancel,pageRef}){
  const dialogFocus=useStudioDialogFocus(root);
  const chunks=useMeasuredPages(model.text,reader),current=Math.min(page,chunks.length-1);
  pageRef.current=direction=>setPage(x=>clampNumber(x+direction,0,chunks.length-1));
- useEffect(()=>{studioFocusable(root.current)[0]?.focus({preventScroll:true});},[]);
- return h(U.Focusable,{ref:root,...dialogFocus,className:'df-overlay','data-df-overlay':true,role:'dialog','aria-modal':true,'aria-label':model.title,onCancel:e=>{e?.stopPropagation?.();if(!busy)cancel();}},
+ useEffect(()=>{(model.kind==='quit'?root.current?.querySelector('[data-df-confirm]'):studioFocusable(root.current)[0])?.focus({preventScroll:true});},[]);
+ return h(U.Focusable,{ref:root,...dialogFocus,className:'df-overlay','data-df-overlay':true,role:'dialog','aria-modal':true,'aria-label':model.title,onCancel:e=>{if(studioKeyboardOwnsInput(root.current))return;e?.stopPropagation?.();if(!busy)cancel();}},
   h('div',{className:'df-overlay-head'},h('h2',null,model.title)),
   h('div',{ref:reader,className:'df-reader','data-df-reader':true},chunks[current]),
   chunks.length>1&&h('div',{className:'df-overlay-foot'},h(StudioButton,{disabled:current===0||busy,onClick:()=>setPage(x=>x-1)},'Previous page'),h('span',{className:'df-subtle'},`${current+1} / ${chunks.length}`),h(StudioButton,{disabled:current===chunks.length-1||busy,onClick:()=>setPage(x=>x+1)},'Next page')),
-  h('div',{className:'df-overlay-foot'},h(StudioButton,{disabled:busy,onClick:cancel},model.kind==='blocked'?'Close':'Cancel'),model.secondary&&h(StudioButton,{disabled:busy,onClick:secondary},model.secondary),model.kind!=='blocked'&&model.canConfirm!==false&&h(StudioButton,{className:'df-primary',disabled:busy,onClick:confirm},model.label)));
+  h('div',{className:'df-overlay-foot'},h(StudioButton,{disabled:busy,onClick:cancel},model.kind==='blocked'?'Close':'Cancel'),model.secondary&&h(StudioButton,{disabled:busy,onClick:secondary},model.secondary),model.kind!=='blocked'&&model.canConfirm!==false&&h(StudioButton,{className:'df-primary','data-df-confirm':true,disabled:busy,onClick:confirm},model.label)));
 }
 /* Steam browser input maps R2 to a mouse click as well. Reserve triggers for
    setup navigation and suppress that click inside this frame, including dialogs. */
@@ -106,7 +106,7 @@ function useSetupNavigation(frameRef,actions){
   const frame=frameRef.current,doc=frame?.ownerDocument,view=doc?.defaultView;if(!view)return;
   const input=view.SteamClient?.Input||globalThis.SteamClient?.Input;
   const held=new Set();let subscription=null,lastCode=0,lastTime=-Infinity,suppressUntil=0,active=true,windowActive=true,raf=null;
-  const available=()=>active&&windowActive&&frame.isConnected&&doc.visibilityState!=='hidden'&&(!doc.hasFocus||doc.hasFocus())&&(doc.activeElement===doc.body||frame.contains(doc.activeElement));
+  const available=()=>!studioKeyboardOwnsInput(frame)&&active&&windowActive&&frame.isConnected&&doc.visibilityState!=='hidden'&&(!doc.hasFocus||doc.hasFocus())&&(doc.activeElement===doc.body||frame.contains(doc.activeElement));
   const dispatch=code=>{
    if(!available()||code<5||code>8)return;
    const now=view.performance.now();
@@ -152,31 +152,31 @@ function OptiConfigEditor({model,busy,error,save,cancel}){
  const [value,setValue]=useState(model.text),[manual,setManual]=useState(model.manual),root=useRef(null),editor=useRef(null),entry=useRef(null);
  useEffectListScroll(editor);
  const focus=useStudioDialogFocus(root,{editor,entry});
- return h(U.Focusable,{ref:root,className:'df-overlay df-opti-editor','data-df-overlay':true,role:'dialog','aria-modal':true,'aria-label':'Advanced OptiScaler settings','flow-children':'column',...focus,onCancel:e=>{e?.stopPropagation?.();if(!busy)cancel();}},
+ return h(U.Focusable,{ref:root,className:'df-overlay df-opti-editor','data-df-overlay':true,role:'dialog','aria-modal':true,'aria-label':'Advanced OptiScaler settings','flow-children':'column',...focus,onCancel:e=>{if(studioKeyboardOwnsInput(root.current))return;e?.stopPropagation?.();if(!busy&&!studioEndTextEditing(root.current))cancel();}},
   h('div',{className:'df-overlay-head'},h('h2',null,'Advanced OptiScaler settings'),h(StudioButton,{className:'df-icon',disabled:busy,'aria-label':'Close OptiScaler editor',onClick:cancel},studioIcon('close'))),
-  h('div',{className:'df-subtle'},`OptiScaler ${model.version||''} · ${manual?'Manual INI':'Guided settings'} · D-pad navigates · A edits · Steam + X keyboard.`),
+  h('div',{className:'df-subtle'},`OptiScaler ${model.version||''} · ${manual?'Manual INI':'Guided settings'} · A enters text editing.`),
   h('div',{className:'df-setup-bottom'},h(StudioButton,{disabled:busy||model.installed===null||model.installed===undefined,onClick:()=>{setValue(model.installed);setManual(true);}},'Load installed settings'),h(StudioButton,{disabled:busy,onClick:()=>{setValue(model.defaults);setManual(false);}},'Use guided settings')),
-  h(U.Focusable,{ref:entry,role:'group','aria-label':'Edit OptiScaler.ini','data-df-focus':true,tabIndex:busy?-1:0,'aria-disabled':busy||undefined,focusClassName:'df-native-focus',onActivate:event=>{event?.stopPropagation?.();if(!busy)editor.current?.focus({preventScroll:true});},style:{display:'flex',flex:1,minHeight:0}},
-   h('textarea',{ref:editor,'aria-label':'OptiScaler.ini','data-df-scroll':true,tabIndex:-1,spellCheck:false,disabled:busy,value,onChange:e=>{setValue(e.target.value);setManual(true);},style:{flex:1,minHeight:0,width:'100%',resize:'none',boxSizing:'border-box',fontFamily:'monospace',fontSize:12,lineHeight:1.4,overflowY:'auto',touchAction:'pan-y'}})),
+  h(StudioTextEditor,{entryRef:entry,editorRef:editor,label:'OptiScaler.ini',value,onChange:text=>{setValue(text);setManual(true);},raw:true,disabled:busy}),
   h('div',{className:'df-subtle'},'Manual values replace the guided INI presets. LoadReshade follows the ReShade toggle. Saving only updates this game’s draft.'),
   error&&h('div',{className:'df-setup-alert',role:'alert'},error),
-  h('div',{className:'df-overlay-foot'},h(StudioButton,{disabled:busy,onClick:cancel},'Cancel'),h(StudioButton,{className:'df-primary',disabled:busy,onClick:()=>save(manual?value:'')},busy?'Checking…':'Save to draft')));
+  h('div',{className:'df-overlay-foot'},h(StudioButton,{disabled:busy,onClick:cancel},'Cancel'),h(StudioButton,{className:'df-primary',disabled:busy,onClick:()=>save(manual||editor.current?.value!==value?(editor.current?.value??value):'')},busy?'Checking…':'Save to draft')));
 }
 
 function SetupStudio({frameRef,frameHeight,p,step,done,content,summary,review,busy,message,error,progress,onNext,onNavigate,onBack,onRefresh,onExit,effects,toggleEffect,runtimeJob,cancelRuntime,runtimeLog,effectIssues,optiEditor,onOptiSave,onOptiCancel,prompt,onPromptConfirm,onPromptSecondary,onPromptCancel,onForce}){
- const [size,setSize]=useState({width:1280,height:688}),[overlay,setOverlay]=useState(null),returnFocus=useRef(null),pageRef=useRef(null),cursor=useRef(null);
+ const [size,setSize]=useState({width:1280,height:688}),[overlay,setOverlay]=useState(null),[quit,setQuit]=useState(false),returnFocus=useRef(null),pageRef=useRef(null),cursor=useRef(null);
  const steps=setupSteps(p),index=steps.findIndex(x=>x.id===step),meta=steps[index]||{title:'Lossless Scaling DLL',phase:4};
- const inventory=studioInventory(content),short=size.height<550,narrow=size.width<650,locked=busy||!!overlay||!!prompt||!!optiEditor;
+ const inventory=studioInventory(content),short=size.height<550,narrow=size.width<650,locked=busy||!!overlay||!!prompt||!!optiEditor||quit;
+ const back=()=>{if(busy)return;if(quit)setQuit(false);else if(optiEditor)onOptiCancel();else if(prompt)onPromptCancel();else if(overlay)close();else if(step==='game')setQuit(true);else onBack();};
  const navEvent=useSetupNavigation(frameRef,{locked,done,navigate:onNavigate});
  const close=()=>{setOverlay(null);const view=frameRef.current?.ownerDocument.defaultView;view?.requestAnimationFrame(()=>{if(returnFocus.current?.isConnected)returnFocus.current.focus({preventScroll:true});(frameRef.current?.querySelector('.df-setup-controls .df-primary')||studioFocusable(frameRef.current)[0])?.focus({preventScroll:true});});};
  const open=model=>{returnFocus.current=frameRef.current?.ownerDocument.activeElement;setOverlay(model);};
  useEffect(()=>{if(prompt||optiEditor)return;const view=frameRef.current?.ownerDocument.defaultView;const timer=view?.requestAnimationFrame(()=>{const controls=frameRef.current?.querySelector('.df-setup-controls');if(controls&&!frameRef.current.contains(controls.ownerDocument.activeElement))studioFocusable(controls)[0]?.focus({preventScroll:true});});return()=>{if(timer!==undefined)view?.cancelAnimationFrame(timer);};},[prompt,optiEditor]);
- useStudioInput(frameRef,cursor,{back:()=>{if(optiEditor){if(!busy)onOptiCancel();}else if(prompt){if(!busy)onPromptCancel();}else if(overlay)close();else if(!busy)onBack();},page:direction=>{if(overlay||prompt)pageRef.current?.(direction);}});
+ useStudioInput(frameRef,cursor,{back,page:direction=>{if(overlay||prompt)pageRef.current?.(direction);}});
  useEffect(()=>{const el=frameRef.current,view=el?.ownerDocument.defaultView;if(!el||!view)return;const measure=()=>setSize({width:el.clientWidth,height:el.clientHeight});measure();let observer;try{observer=new view.ResizeObserver(measure);observer.observe(el);}catch{}view.addEventListener('resize',measure);return()=>{observer?.disconnect();view.removeEventListener('resize',measure);};},[]);
  useEffect(()=>{setOverlay(step==='effects'?{type:'effects'}:null);if(step==='effects')return;const view=frameRef.current?.ownerDocument.defaultView;const timer=view?.requestAnimationFrame(()=>{const el=frameRef.current?.querySelector('.df-setup-fields');studioFocusable(el||frameRef.current)[0]?.focus({preventScroll:true});});return()=>{if(timer!==undefined)view?.cancelAnimationFrame(timer);};},[step]);
  const details=()=>open({type:'reader',title:'Apply details',text:[...((review?.blockers||[]).map(x=>`${x.title}\n${x.detail}`)),...(review?.resolutions||[]).map(x=>`${x.title}\n${x.before} → ${x.after}\n${x.detail}`),...(review?.conflicts||[]).map(x=>JSON.stringify(x)),...(review?.warnings||[]),...(p?.reshade.techniques||[])].join('\n\n')||'No additional details.'});
- return h(U.Focusable,{ref:frameRef,className:'df-studio df-setup','data-df-frame':true,'data-df-studio':true,'data-setup-step':step,'data-setup-done':done,'data-short':short,'data-narrow':narrow,style:{height:frameHeight},'flow-children':'column',onButtonDown:navEvent,onCancel:e=>{e?.stopPropagation?.();if(optiEditor){if(!busy)onOptiCancel();}else if(prompt){if(!busy)onPromptCancel();}else if(overlay)close();else if(!busy)onBack();}},h('style',null,studioCSS+setupCSS),h('div',{className:'df-atmosphere'}),
-  h('header',{className:'df-top'},h('div',{className:'df-brand'},h('span',{className:'df-logo'},studioIcon('fusion',22)),'Deck Fusion'),h('span',{className:'df-beta'},'v0.3-beta10'),h('div',{className:'df-game'},h('strong',null,p?.name||'Choose a game')),h(StudioButton,{onClick:onExit,disabled:locked,'aria-label':'Exit to Steam Home',className:'df-icon'},studioIcon('close',18))),
+ return h(U.Focusable,{ref:frameRef,className:'df-studio df-setup','data-df-frame':true,'data-df-studio':true,'data-setup-step':step,'data-setup-done':done,'data-short':short,'data-narrow':narrow,style:{height:frameHeight},'flow-children':'column',onButtonDown:navEvent,onCancel:e=>{if(studioKeyboardOwnsInput(frameRef.current))return;e?.preventDefault?.();e?.stopPropagation?.();if(!studioEndTextEditing(frameRef.current))back();}},h('style',null,studioCSS+setupCSS),h('div',{className:'df-atmosphere'}),
+  h('header',{className:'df-top'},h('div',{className:'df-brand'},h('span',{className:'df-logo'},studioIcon('fusion',22)),'Deck Fusion'),h('span',{className:'df-beta'},'v0.3-beta12'),h('div',{className:'df-game'},h('strong',null,p?.name||'Choose a game')),h(StudioButton,{onClick:onExit,disabled:locked,'aria-label':'Exit to Steam Home',className:'df-icon'},studioIcon('close',18))),
   h('main',{className:'df-setup-main'},h('div',{className:'df-phase-list','aria-label':'Setup progress'},...SETUP_PHASES.map((title,i)=>h('span',{key:title,className:'df-phase','data-active':i===meta.phase||done,'aria-current':i===meta.phase?'step':undefined},`${i+1}  ${title}`))),
    h('div',{className:'df-setup-heading'},h('h1',null,done?'Setup complete':meta.title),!done&&inventory.notes.length>0&&h(StudioButton,{className:'df-help',disabled:locked,'aria-label':'Step information',onClick:()=>open({type:'reader',title:meta.title,text:inventory.notes.map(x=>x.text).join('\n\n')})},studioIcon('info',18)),!done&&h('span',{className:'df-subtle'},index<0?'LSFG setup':`Tab ${steps.filter(x=>x.phase===meta.phase).findIndex(x=>x.id===step)+1} / ${steps.filter(x=>x.phase===meta.phase).length}`)),
    h('div',{className:'df-setup-body'},
@@ -191,5 +191,5 @@ function SetupStudio({frameRef,frameHeight,p,step,done,content,summary,review,bu
    h('div',{className:'df-setup-controls'},!done&&h(StudioButton,{onClick:onBack,disabled:locked||step==='game'},'Back'),!done&&runtimeLog&&['runtimes','review'].includes(step)&&h(StudioButton,{disabled:locked,onClick:()=>open({type:'reader',title:'Runtime installer log',text:runtimeLog})},'Installer log'),!done&&step==='review'&&h(R.Fragment,null,h(StudioButton,{onClick:details,disabled:locked},'Details'),h(StudioButton,{onClick:onRefresh,disabled:locked,'aria-label':'Refresh review'},'Refresh'),h(StudioButton,{onClick:onForce,disabled:locked,'aria-label':'Review force apply'},'Force apply…')),h(StudioButton,{className:'df-primary',disabled:locked||(!done&&!p)||(!done&&step==='review'&&(!review?.approval_token||!!review.blockers?.length)),onClick:done?onExit:onNext},done?'Return to Steam Home':busy?'Working…':step==='review'?'Apply this game':'Next'))),
   h('footer',{className:'df-footer'},h('span',null,'L1/R1 steps · L2/R2 tabs · A select · B back'),h('span',{className:'df-status',role:'status'},message||'Draft'),runtimeJob&&h(StudioButton,{onClick:cancelRuntime},'Cancel installation')),
   progress!==null&&h('progress',{className:'df-progress',max:1,value:progress,'aria-label':'Operation progress'}),
-  optiEditor?h(OptiConfigEditor,{key:optiEditor.appid,model:optiEditor,busy,error,save:onOptiSave,cancel:onOptiCancel}):prompt?h(SetupPrompt,{key:prompt.kind+prompt.text,model:prompt,busy,confirm:onPromptConfirm,secondary:onPromptSecondary,cancel:onPromptCancel,pageRef}):overlay&&(overlay.type==='effects'?h(EffectPicker,{effects,selected:p?.reshade.techniques||[],toggle:toggleEffect,close,catalogIssue:effectIssues}):h(StudioOverlay,{model:overlay,close,short,narrow,pageRef})));
+  quit?h(SetupPrompt,{model:{kind:'quit',title:'Quit Deck Fusion?',text:'A: quit and return to Steam Home. B: cancel.',label:'Quit'},busy:false,confirm:onExit,cancel:()=>setQuit(false),pageRef}):optiEditor?h(OptiConfigEditor,{key:optiEditor.appid,model:optiEditor,busy,error,save:onOptiSave,cancel:onOptiCancel}):prompt?h(SetupPrompt,{key:prompt.kind+prompt.text,model:prompt,busy,confirm:onPromptConfirm,secondary:onPromptSecondary,cancel:onPromptCancel,pageRef}):overlay&&(overlay.type==='effects'?h(EffectPicker,{effects,selected:p?.reshade.techniques||[],toggle:toggleEffect,close,catalogIssue:effectIssues}):h(StudioOverlay,{model:overlay,close,short,narrow,pageRef})));
 }

@@ -1,0 +1,70 @@
+✖ A and X from the editor open the native keyboard; its D-pad and B events cannot edit or close the INI (785.407137ms)
+✖ focusing text releases browser mode for Steam + X, and a foreign window cannot receive the keyboard request (703.468164ms)
+✖ a keyboard request that never displays reports failure and keeps the draft; retry can recover (2784.882391ms)
+✖ missing and throwing native keyboard managers report an error without falling back to an external URI (678.729577ms)
+✖ line editor X uses the same native manager and allows saving after the keyboard closes (675.411957ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 0
+ℹ fail 5
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 6466.782415
+
+✖ failing tests:
+
+test at tests/studio-dom.test.mjs:846:1
+✖ A and X from the editor open the native keyboard; its D-pad and B events cannot edit or close the INI (785.407137ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  0 !== 1
+  
+      at TestContext.<anonymous> (file:///workspace/scratch/9e9270375a49/work/deck-fusion/tests/studio-dom.test.mjs:849:121)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 0,
+    expected: 1,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests/studio-dom.test.mjs:858:1
+✖ focusing text releases browser mode for Steam + X, and a foreign window cannot receive the keyboard request (703.468164ms)
+  AssertionError [ERR_ASSERTION]: Steam shortcut remains in charge while text is focused
+  
+  true !== false
+  
+      at TestContext.<anonymous> (file:///workspace/scratch/9e9270375a49/work/deck-fusion/tests/studio-dom.test.mjs:860:152)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: true,
+    expected: false,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests/studio-dom.test.mjs:867:1
+✖ a keyboard request that never displays reports failure and keeps the draft; retry can recover (2784.882391ms)
+  TypeError: Cannot read properties of null (reading 'textContent')
+      at TestContext.<anonymous> (file:///workspace/scratch/9e9270375a49/work/deck-fusion/tests/studio-dom.test.mjs:870:58)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+
+test at tests/studio-dom.test.mjs:874:1
+✖ missing and throwing native keyboard managers report an error without falling back to an external URI (678.729577ms)
+  TypeError: Cannot read properties of null (reading 'textContent')
+      at TestContext.<anonymous> (file:///workspace/scratch/9e9270375a49/work/deck-fusion/tests/studio-dom.test.mjs:876:211)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+
+test at tests/studio-dom.test.mjs:880:1
+✖ line editor X uses the same native manager and allows saving after the keyboard closes (675.411957ms)
+  TypeError: dialog.__secondary is not a function
+      at TestContext.<anonymous> (file:///workspace/scratch/9e9270375a49/work/deck-fusion/tests/studio-dom.test.mjs:882:333)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7)

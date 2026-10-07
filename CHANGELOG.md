@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.3-beta12
+
+- Replace the ineffective external keyboard URI with the native VirtualKeyboardManager belonging to the window that renders the editor. A and X both enter text mode and request the keyboard, including X from the highlighted editor.
+- Release Steam’s browser controller action set while a text field is active. Keep it released during keyboard interaction, then restore mouse mode after leaving text editing.
+- Yield editor direction, button, cancellation, scrolling and focus handling to Steam while its keyboard is visible. Allow native keyboard controls through the focus trap, including a portal inside the plugin frame.
+- Verify that Steam’s keyboard element appears after a request. Missing managers, request exceptions and a keyboard that never appears produce an error instead of silent success.
+- Extend regression coverage to native manager calls, correct window selection, browser-mode handoff, keyboard input ownership, native typing, retry, and line-editor save controls. These tests model Steam and do not constitute physical Steam Deck verification. Bundled dependencies are unchanged.
+
+## v0.3-beta11
+
+- Give full INI and text editors a separate caret mode. A enters editing, D-pad moves the caret, and the INI scrolls to keep it visible. B returns to the editor controls; native Steam focus cannot jump to surrounding controls while caret mode is active.
+- Add X and Open Steam keyboard actions using Steam’s keyboard URI. Add an Edit line popup with Steam’s native text field. Capture native keyboard value updates and flush them when saving.
+- Preserve INI text, selections, Unicode boundaries and the intended column through short lines. Do not infer setting-specific value lists.
+- On the first 1 Game tab, B opens Quit Deck Fusion? with Quit selected. A confirms the existing clean exit to Steam Home; B cancels.
+- Add controller, scrolling, keyboard-request, line-edit and quit regressions. Steam Deck hardware verification is still pending. Bundled dependency versions are unchanged.
+
 ## v0.3-beta10
 
 - Handle Steam's native direction-navigation callback in every editor panel, including OptiScaler, ReShade INI/preset, text, range, selection, effects and confirmation panels. Cancel navigation at panel edges, including held-button repeats.

@@ -6,7 +6,7 @@ I wanted to use frame generation, better upscaling and a few ReShade effects on 
 
 You choose a game, enable the features you want, adjust their settings and apply. Each game keeps its own configuration, so you can use a different combination for Cyberpunk, The Witcher 3 or Baldur's Gate 3 without starting from scratch every time.
 
-**Current version: v0.3-beta10.** Cyberpunk 2077, The Witcher 3 and Baldur's Gate 3 have been set up successfully during development. That isn't a compatibility guarantee for every game, and the project is still in beta.
+**Current version: v0.3-beta12.** Cyberpunk 2077, The Witcher 3 and Baldur's Gate 3 have been set up successfully during development. That isn't a compatibility guarantee for every game, and the project is still in beta.
 
 ## What it does
 
@@ -28,7 +28,7 @@ OptiScaler needs a compatible 64-bit Windows game with a supported upscaler inpu
 
 ## Installation
 
-1. Download `Deck-Fusion-v0.3-beta10_full.zip` for offline setup, or `Deck-Fusion-v0.3-beta10.zip` for the smaller download from this repository's **Releases**. Use the plugin ZIP rather than GitHub's automatically generated source archive.
+1. Download `Deck-Fusion-v0.3-beta12_full.zip` for offline setup, or `Deck-Fusion-v0.3-beta12.zip` for the smaller download from this repository's **Releases**. Use the plugin ZIP rather than GitHub's automatically generated source archive.
 2. Open Decky Loader's settings, enable developer mode if necessary, and install the plugin from the ZIP.
 3. Open Deck Fusion in the Decky sidebar, then select **Open Deck Fusion**.
 
@@ -36,7 +36,7 @@ You can install an update over the existing plugin to keep your profiles and bac
 
 ## Full offline version
 
-`Deck-Fusion-v0.3-beta10_full.zip` includes the tools and runtime payloads that setup would otherwise download. I made this version so a moved release, broken link or changed runtime installer won't prevent you from setting up a game. The included versions will get older, but the files remain available inside the ZIP.
+`Deck-Fusion-v0.3-beta12_full.zip` includes the tools and runtime payloads that setup would otherwise download. I made this version so a moved release, broken link or changed runtime installer won't prevent you from setting up a game. The included versions will get older, but the files remain available inside the ZIP.
 
 | Component | Included version |
 | --- | --- |
@@ -71,7 +71,7 @@ The optional [FSR 4.1.1b RDNA2 fix](https://github.com/the3rdparty1917/fsr4xyz/r
 
 Open **Upscaling output > Advanced OptiScaler settings** to edit the full `OptiScaler.ini` for the selected game. You can start with the configuration Deck Fusion would apply, choose **Load installed settings** to import the file already in the game's executable folder, or choose **Use guided settings** to return to the normal presets.
 
-**Save to draft** checks the INI and remembers it for that game. **Cancel** discards the editor's changes. The game folder is updated when you press **Apply this game**, using the same backup and recovery process as the rest of setup. Restart the game afterwards. Use the **D-pad** to move between the editor and its buttons, then **A** to edit the INI. A keyboard works directly; on the Deck, use **Steam + X** to open the on-screen keyboard, and the right stick or touch to scroll the editor. Focus stays inside the editor until you close it.
+**Save to draft** checks the INI and remembers it for that game. **Cancel** discards the editor's changes. The game folder is updated when you press **Apply this game**, using the same backup and recovery process as the rest of setup. Restart the game afterwards. Use the **D-pad** to highlight the editor, then **A** to enter text editing. A or X requests the keyboard directly through the Steam UI window containing the editor. The D-pad moves the caret and scrolls the INI when the keyboard is closed. While Steam’s keyboard is open, it owns D-pad and B input. **Open Steam keyboard** performs the same native request. Text mode suspends Deck Fusion’s browser controller mode so Steam + X can work normally. If Steam does not display its keyboard, the editor shows an error and retains your text. **B** returns to the editor controls. **Edit line** opens the line at the caret in Steam’s native text field; press A in that field for keyboard entry, then choose **Use edited line**. The complete INI remains available, and a physical keyboard works directly. No setting values are guessed or automatically substituted.
 
 While a manual INI is active, the guided output picker is disabled so it cannot overwrite your changes. `LoadReshade` still follows Deck Fusion's ReShade toggle. Keep the renderer settings and `[FrameGen]` section, and set `Enabled` to `true` or `false` explicitly. Enabling OptiScaler frame generation while LSFG is enabled is rejected.
 
@@ -121,17 +121,20 @@ Removal keeps your applied LSFG settings, frame cap and Windows runtimes; unappl
 | --- | --- |
 | D-pad / left stick | Navigate |
 | A / Enter / Space | Select |
-| B / Escape | Go back or close a popup |
+| B / Escape | Go back or close a popup; on 1 Game, ask to quit |
 | Right trackpad | Move the pointer |
 | Mouse / touchscreen | Click or tap |
 | L1 / R1 | Previous / next main setup step (1–6) |
 | L2 / R2 | Previous / next tab within the current step |
 | Right stick / mouse wheel / touch drag | Scroll the effects list |
-| Steam + X | Open the on-screen keyboard |
+| A / X in an editor | Enter text mode and request Steam’s native keyboard |
+| D-pad in text mode | Move the caret and scroll to keep it visible |
+| Steam + X / Open Steam keyboard | Open Steam’s keyboard while text is focused |
+| B in text mode | Return to the editor controls |
 
 R2 is reserved for tab navigation. Use A to activate the focused control, or click with a mouse or tap the screen. Navigation buttons do not confirm Apply or removal, and they stay locked while a popup is open. Steps with no applicable settings are skipped.
 
-Exiting Deck Fusion returns to Steam Home and the game reel.
+On the first **1 Game** tab, B opens **Quit Deck Fusion?**. A confirms and returns to Steam Home; B cancels. Exiting releases Deck Fusion’s controller input handlers and returns to Steam Home and the game reel.
 
 ## Building from source
 
@@ -153,7 +156,7 @@ python3 scripts/hash_manifest.py
 python3 scripts/package.py
 ```
 
-The package script writes the release ZIP and its SHA-256 file beside the source directory. It checks the archive's integrity and that the compiled frontend matches the source. Public versions use `v0.3-beta10`; the package metadata uses `0.3.0-beta10`.
+The package script writes the release ZIP and its SHA-256 file beside the source directory. It checks the archive's integrity and that the compiled frontend matches the source. Public versions use `v0.3-beta12`; the package metadata uses `0.3.0-beta12`.
 
 The backend and interface tests use simulated game files and Steam/Decky services. They cover configuration, installation transactions and UI behavior, but cannot establish game compatibility or GPU performance. Previous test results and their limits are documented in [the verification record](agent-review.md).
 

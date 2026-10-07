@@ -12,11 +12,11 @@ import {createRequire} from 'node:module';
 const localModules=new URL('../node_modules/',import.meta.url).pathname;
 const modules=process.env.DF_TEST_MODULES||(fs.existsSync(path.join(localModules,'jsdom'))?localModules:null);
 const skip=!modules?'Install test dependencies with npm ci, or set DF_TEST_MODULES':false;
-const source=fs.readFileSync(new URL('../dist/index.js',import.meta.url),'utf8').replace('export default function(){','window.__makePlugin=function(){');
+const source=fs.readFileSync(process.env.DF_TEST_BUNDLE||new URL('../dist/index.js',import.meta.url),'utf8').replace('export default function(){','window.__makePlugin=function(){');
 let JSDOM,React,ReactDOM;
 if(modules){const req=createRequire(path.resolve(modules,'package.json'));({JSDOM}=req('jsdom'));const bootstrap=new JSDOM('<!doctype html><body></body>');global.window=bootstrap.window;global.document=bootstrap.window.document;Object.defineProperty(global,'navigator',{value:bootstrap.window.navigator,configurable:true});React=req('react');ReactDOM=req('react-dom/client');}
 const settle=async(ms=15)=>{await new Promise(r=>setTimeout(r,ms));};
-async function host({width=1280,height=800,raw=true,native=false,modern=false,rdna2Fix=false,guided=false,prepare=null,nativeScroll=false,initialLaunch='--skip-launcher',launchFromSidebar=false}={}){
+async function host({width=1280,height=800,raw=true,native=false,modern=false,rdna2Fix=false,guided=false,prepare=null,nativeScroll=false,initialLaunch='--skip-launcher',launchFromSidebar=false,keyboard=false,keyboardAppears=true}={}){
  const dom=new JSDOM('<!doctype html><div id="root"></div><div id="modal"></div>',{url:'https://deck-fusion.test',pretendToBeVisual:true,runScripts:'outside-only'}),w=dom.window;
  global.window=w;global.document=w.document;Object.defineProperty(global,'navigator',{value:w.navigator,configurable:true});
  Object.defineProperty(w,'innerWidth',{value:width,writable:true});Object.defineProperty(w,'innerHeight',{value:height,writable:true});w.document.hasFocus=()=>true;
@@ -24,15 +24,15 @@ async function host({width=1280,height=800,raw=true,native=false,modern=false,rd
  Object.defineProperties(w.HTMLElement.prototype,{clientWidth:{configurable:true,get(){return this.classList.contains('df-reader')?Math.min(600,w.innerWidth-90):w.innerWidth;}},clientHeight:{configurable:true,get(){if(this.classList.contains('df-options'))return Math.max(44,w.innerHeight-290);return this.classList.contains('df-reader')?Math.max(70,w.innerHeight-370):w.innerHeight-112;}},offsetWidth:{configurable:true,get(){return this.clientWidth;}},offsetHeight:{configurable:true,get(){return this.clientHeight;}},scrollHeight:{configurable:true,get(){if(this.classList.contains('df-reader'))return Math.max(this.clientHeight,(this.textContent||'').split('\n').reduce((n,line)=>n+Math.max(1,Math.ceil(line.length/(this.clientWidth/8))),0)*22+26);return this.clientHeight;}}});
  w.HTMLElement.prototype.getBoundingClientRect=function(){return {x:0,y:40,left:0,top:40,right:this.clientWidth,bottom:40+this.clientHeight,width:this.clientWidth,height:this.clientHeight};};
  let hit=null;w.document.elementFromPoint=()=>hit||w.document.querySelector('[data-df-studio]');
- const h=React.createElement,routes=new Map(),calls=[],listeners=[],rawState={callback:null,unregistered:false,nativeCalls:[],inputCallback:null,inputUnregistered:false},routeLog=[];
+ const h=React.createElement,routes=new Map(),calls=[],listeners=[],rawState={callback:null,unregistered:false,nativeCalls:[],keyboardUris:[],keyboardRequests:[],keyboardWarnings:[],inputCallback:null,inputUnregistered:false},routeLog=[];
  const root=ReactDOM.createRoot(w.document.querySelector('#root')),modal=ReactDOM.createRoot(w.document.querySelector('#modal'));
  const history={entries:['/library/home'],index:0,mainMenuOpens:0};
  const renderRoute=to=>{routeLog.push(to);const Route=routes.get(to);root.render(Route?h(Route):h('div',null,'Steam Home'));};
  const fields={
   PanelSection:({title,children})=>h('section',null,h('h3',null,title),children),PanelSectionRow:({children})=>h('div',null,children),
   ButtonItem:({children,onClick,disabled})=>h('button',{onClick,disabled},children),DialogButton:({children,...props})=>h('button',props,children),
-  ToggleField:()=>null,TextField:()=>null,DropdownItem:()=>null,SliderField:()=>null,
-  Focusable:React.forwardRef(({children,onActivate,onCancel,onButtonDown,onGamepadDirection,focusClassName,focusWithinClassName,...props},ref)=>h('div',{...props,ref:el=>{if(el){el.__activate=onActivate;el.__cancel=onCancel;el.__button=onButtonDown;el.__direction=onGamepadDirection;}if(typeof ref==='function')ref(el);else if(ref)ref.current=el;}},children)),
+  ToggleField:()=>null,TextField:({value,onChange,label,focusOnMount,...props})=>h('div',{'data-native-text-field':true},h('input',{...props,value,onChange})),DropdownItem:()=>null,SliderField:()=>null,
+  Focusable:React.forwardRef(({children,onActivate,onCancel,onButtonDown,onGamepadDirection,onSecondaryButton,focusClassName,focusWithinClassName,...props},ref)=>h('div',{...props,ref:el=>{if(el){el.__activate=onActivate;el.__cancel=onCancel;el.__button=onButtonDown;el.__direction=onGamepadDirection;el.__secondary=onSecondaryButton;}if(typeof ref==='function')ref(el);else if(ref)ref.current=el;}},children)),
   ConfirmModal:p=>h('div',{role:'dialog'},h('h2',null,p.strTitle),p.children,h('button',{onClick:p.onCancel},'Cancel'),h('button',{disabled:p.bOKDisabled,onClick:p.onOK},p.strOKButtonText)),
   showModal(element){const close=()=>modal.render(null);modal.render(React.cloneElement(element,{closeModal:close}));return {Close:close};},
   Navigation:{Navigate:(to,replace=false)=>{if(replace)history.entries[history.index]=to;else{history.entries.splice(history.index+1);history.entries.push(to);history.index++;}renderRoute(to);},NavigateBack(){if(history.index>0)renderRoute(history.entries[--history.index]);else history.mainMenuOpens++;},CloseSideMenus(){}},staticClasses:{}
@@ -49,8 +49,23 @@ async function host({width=1280,height=800,raw=true,native=false,modern=false,rd
  if(prepare)prepare({fixtures,profile,fields,jobResults});
  const api={routerHook:{addRoute:(r,f)=>routes.set(r,f),removeRoute:r=>routes.delete(r)},call:async(method,...args)=>{calls.push({method,args});if(method==='rpc')return {ok:true,result:structuredClone(typeof fixtures[args[0]]==='function'?fixtures[args[0]](args[1]):fixtures[args[0]]||{})};if(method==='active_jobs')return {ok:true,result:[]};if(method==='start_job'){activeJob={action:args[0],payload:args[1]};return {ok:true,result:{id:'test-job'}};}if(method==='get_job'){const handler=jobResults[activeJob.action];const result=typeof handler==='function'?await handler(activeJob.payload):handler||{profile:activeJob.payload.profile||profile,approval_token:'test-approval',blockers:[],changes:[],warnings:[],launch_after:'%command% --skip-launcher',resolutions:[]};return {ok:true,result:{state:'done',result}};}throw Error(method);}};
  let liveLaunch=initialLaunch;
- Object.assign(w,{SP_REACT:React,DFL:fields,SteamClient:{Apps:{RegisterForAppDetails:(id,cb)=>{listeners.push(cb);cb({strLaunchOptions:liveLaunch});return {unregister(){}};},SetAppLaunchOptions:(id,value)=>{liveLaunch=value;listeners.forEach(cb=>cb({strLaunchOptions:value}));}},Input:{...(modern?{RegisterForControllerInputMessages:cb=>{rawState.inputCallback=cb;return {unregister:()=>{rawState.inputCallback=null;rawState.inputUnregistered=true;}}}}:{}),...(raw?{RegisterForControllerStateChanges:cb=>{rawState.callback=cb;return {unregister:()=>{rawState.callback=null;rawState.unregistered=true;}}}}:{}),...(native?{SetWebBrowserActionset:enabled=>rawState.nativeCalls.push(enabled)}:{})}},__DECKY_SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED_deckyLoaderAPIInit:{connect:()=>api}});
- w.eval(source+'\nwindow.__studio={studioInventory,useMeasuredPages,StudioReviewContent,StudioOverlay,StudioButton,StudioField,SetupStudio,SetupPrompt,EffectPicker,setupEffects,setupSteps,startupGame,sameGuidedGraphicsPlan};');
+ Object.assign(w,{SP_REACT:React,DFL:fields,SteamClient:{Apps:{RegisterForAppDetails:(id,cb)=>{listeners.push(cb);cb({strLaunchOptions:liveLaunch});return {unregister(){}};},SetAppLaunchOptions:(id,value)=>{liveLaunch=value;listeners.forEach(cb=>cb({strLaunchOptions:value}));}},System:{OpenInSystemBrowser:uri=>rawState.keyboardUris.push(uri)},Input:{...(modern?{RegisterForControllerInputMessages:cb=>{rawState.inputCallback=cb;return {unregister:()=>{rawState.inputCallback=null;rawState.inputUnregistered=true;}}}}:{}),...(raw?{RegisterForControllerStateChanges:cb=>{rawState.callback=cb;return {unregister:()=>{rawState.callback=null;rawState.unregistered=true;}}}}:{}),...(native?{SetWebBrowserActionset:enabled=>rawState.nativeCalls.push(enabled)}:{})}},__DECKY_SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED_deckyLoaderAPIInit:{connect:()=>api}});
+ // Model the in-window Steam keyboard separately from the external URI. This
+ // rejects browser-actionset ownership, which beta11 incorrectly retained.
+ w.console.warn=(...args)=>rawState.keyboardWarnings.push(args);
+ const keyboardManager={SetVirtualKeyboardVisible(){
+  assert.equal(this,keyboardManager,'Preserve the native manager method receiver');
+  assert.notEqual(rawState.nativeCalls.at(-1),true,'Plugin must release browser controller mode before requesting keyboard');
+  const field=w.document.activeElement;rawState.keyboardRequests.push(field);
+  if(!keyboardAppears)return;
+  const panel=w.document.createElement('div');panel.id='virtual keyboard';
+  const key=w.document.createElement('button');key.textContent='Native key';key.onclick=()=>{field.setRangeText('Z',field.selectionStart,field.selectionEnd,'end');field.dispatchEvent(new w.Event('input',{bubbles:true}));};panel.appendChild(key);w.document.body.appendChild(panel);
+ }};
+ const steamWindow={BrowserWindow:w,VirtualKeyboardManager:keyboardManager};
+ if(keyboard)w.SteamUIStore={ActiveWindowInstance:steamWindow,GetFocusedWindowInstance:()=>steamWindow};
+ rawState.keyboardManager=keyboardManager;rawState.steamWindow=steamWindow;
+ rawState.dismissKeyboard=()=>{w.document.getElementById('virtual keyboard')?.remove();rawState.keyboardRequests.at(-1)?.focus({preventScroll:true});};
+ w.eval(source+'\nwindow.__studio={studioInventory,useMeasuredPages,StudioReviewContent,StudioOverlay,StudioButton,StudioField,StudioTextEditor,studioMoveCaret,studioLineAt,studioKeyboardVisible:typeof studioKeyboardVisible==="function"?studioKeyboardVisible:()=>false,SetupStudio,SetupPrompt,EffectPicker,setupEffects,setupSteps,startupGame,sameGuidedGraphicsPlan};');
  const plugin=w.__makePlugin();
  const openSidebar=async()=>{root.render(plugin.content);await settle();[...w.document.querySelectorAll('button')].find(e=>e.textContent==='Open Deck Fusion').click();await settle(280);};
  if(launchFromSidebar)await openSidebar();else{root.render(plugin.content);await settle();fields.Navigation.Navigate(guided?'/deck-fusion':'/deck-fusion/expert');await settle(280);}
@@ -224,7 +239,7 @@ test('guided setup uses each Next stage, routes ReShade automatically, and keeps
  try{
   assert.equal(setupStep(t),'game');assert.equal(t.w.document.querySelector('.df-nav'),null);
   assert.equal(t.el('Optional Windows runtime setup'),undefined);assert.equal(t.el('Open setup wizard'),undefined);
-  await t.key('Escape');assert.equal(setupStep(t),'game');assert.equal(t.routeLog.at(-1),'/deck-fusion');
+  await t.key('Escape');assert.equal(setupStep(t),'game');assert.ok(t.w.document.querySelector('[aria-label="Quit Deck Fusion?"]'));await t.key('Escape');assert.equal(t.w.document.querySelector('[aria-label="Quit Deck Fusion?"]'),null);assert.equal(t.routeLog.at(-1),'/deck-fusion');
   await go(t,'target');await go(t,'features');
   await t.click('ReShade');assert.equal(draft(t).reshade.mode,'standalone');
   await t.click('OptiScaler');assert.equal(draft(t).reshade.mode,'opti');
@@ -250,7 +265,7 @@ test('guided setup uses each Next stage, routes ReShade automatically, and keeps
  }finally{await t.close();}
 });
 test('effects popup keeps all toggles, filters them, and scrolls with right stick without duplicate native clicks',{skip},async()=>{
- const t=await host({guided:true,native:true,prepare:({fixtures,profile})=>{
+ const t=await host({guided:true,native:true,keyboard:true,prepare:({fixtures,profile})=>{
   profile.reshade.mode='standalone';
   fixtures.schema.shaders=Array.from({length:80},(_,i)=>({file:`Effect${i}.fx`,relative:`Effect${i}.fx`,uniforms:[],pack:'standard',techniques:[`Effect ${String(i).padStart(2,'0')}`]}));
  }});
@@ -260,14 +275,15 @@ test('effects popup keeps all toggles, filters them, and scrolls with right stic
   assert.equal(popup.querySelectorAll('[role=switch]').length,80);assert.ok(popup.contains(t.w.document.activeElement));
   assert.equal(t.el('Next').getAttribute('aria-disabled'),'true','Background setup controls cannot activate through an open popup');
   await t.click('Effect 79 (Effect79.fx)');assert.equal(draft(t).reshade.techniques.length,1);
-  const input=popup.querySelector('input');input.focus();
+  const input=popup.querySelector('input');input.focus();assert.equal(t.rawState.nativeCalls.at(-1),false,'Filter input releases browser action set');
+  t.rawState.keyboardManager.SetVirtualKeyboardVisible();await settle();popup.__cancel(new t.w.CustomEvent('cancel',{cancelable:true}));assert.ok(popup.isConnected,'Keyboard B must not close the effects popup');t.rawState.dismissKeyboard();
   t.rawState.callback([{unControllerIndex:0,ulButtons:0,sRightStickX:0,sRightStickY:-24000}]);await settle(100);
   assert.ok(list.scrollTop>0,'Native mode uses right-stick packets to scroll the effects pane');
   const before=list.scrollTop;t.rawState.callback([{unControllerIndex:0,ulButtons:0,sRightStickX:0,sRightStickY:0}]);await settle(45);assert.equal(list.scrollTop,before);
   const set=Object.getOwnPropertyDescriptor(t.w.HTMLInputElement.prototype,'value').set;set.call(input,'79');input.dispatchEvent(new t.w.Event('input',{bubbles:true}));input.dispatchEvent(new t.w.Event('change',{bubbles:true}));await settle();
   assert.equal(popup.querySelectorAll('[role=switch]').length,1);assert.equal(popup.querySelector('[role=switch]').getAttribute('aria-checked'),'true');
   await t.click('Done');assert.equal(t.w.document.querySelector('[data-df-overlay]'),null);assert.equal(t.w.document.activeElement,t.el('Next'));
-  assert.equal(draft(t).reshade.techniques[0],'Effect 79@Effect79.fx');assert.deepEqual(t.rawState.nativeCalls,[true]);
+  assert.equal(draft(t).reshade.techniques[0],'Effect 79@Effect79.fx');assert.deepEqual(t.rawState.nativeCalls,[true,false,true]);
  }finally{await t.close();assert.equal(t.rawState.nativeCalls.at(-1),false);}
 });
 test('running game wins over remembered selection with backend fallback',{skip},async()=>{
@@ -490,7 +506,7 @@ test('native Steam scrolling is used without the removed raw-state API and keeps
 });
 
 test('legacy right-stick scroll holds until neutral and stops on focus loss',{skip},async()=>{
- const t=await host({guided:true,native:true,prepare:({fixtures,profile})=>{
+ const t=await host({guided:true,native:true,keyboard:true,prepare:({fixtures,profile})=>{
   profile.reshade.mode='standalone';fixtures.schema.shaders=[{file:'A.fx',relative:'A.fx',pack:'standard',techniques:['A'],uniforms:[]}];
  }});
  try{
@@ -685,17 +701,17 @@ test('invalid manual OptiScaler settings stay open and trigger navigation cannot
   await shoulder(t,6);assert.equal(setupStep(t),'upscale');assert.ok(t.w.document.querySelector('textarea'));
   await t.click('Save to draft');await settle(40);assert.match(t.w.document.querySelector('[role=alert]').textContent,/Invalid/);assert.ok(t.w.document.querySelector('textarea'));
   assert.equal(draft(t).opti.manual_ini||'','');assert.equal(jobs(t).includes('prepare'),false);
-  await t.key('Escape',t.w.document.querySelector('textarea'));assert.equal(t.w.document.querySelector('textarea'),null);
+  await t.key('Escape',t.w.document.querySelector('textarea'));assert.ok(t.w.document.querySelector('textarea'),'First Escape leaves text editing');await t.key('Escape');assert.equal(t.w.document.querySelector('textarea'),null);
  }finally{await t.close();}
 });
 
 test('OptiScaler D-pad and Tab navigation stay in the editor and release the background on close',{skip},async()=>{
  const t=await host({guided:true,modern:true,native:true,raw:false,prepare:optiEditorFixtures});try{
-  await reachUpscale(t);const opener=t.el('Advanced OptiScaler settings');opener.focus();await t.click('Advanced OptiScaler settings');
+  await reachUpscale(t);const opener=t.el('Advanced OptiScaler settings');opener.focus();await t.click('Advanced OptiScaler settings');await settle(50);
   const dialog=t.w.document.querySelector('.df-opti-editor'),entry=t.el('Edit OptiScaler.ini'),textarea=t.w.document.querySelector('textarea');
-  assert.ok(t.w.document.activeElement===entry);assert.ok(t.w.document.querySelector('.df-setup-main').hasAttribute('inert'));
-  const buttons=[t.el('Close OptiScaler editor'),t.el('Load installed settings'),t.el('Use guided settings'),entry,t.el('Cancel'),t.el('Save to draft')];
-  const positions=[[620,0,60,40],[20,60,230,40],[300,60,230,40],[20,130,600,280],[20,460,230,40],[300,460,230,40]];
+  assert.ok(t.w.document.activeElement===entry, 'Initial focus: '+t.w.document.activeElement.outerHTML);assert.ok(t.w.document.querySelector('.df-setup-main').hasAttribute('inert'));
+  const buttons=[t.el('Close OptiScaler editor'),t.el('Load installed settings'),t.el('Use guided settings'),entry,t.el('Cancel'),t.el('Save to draft'),t.el('Open Steam keyboard'),t.el('Edit line')];
+  const positions=[[620,0,60,40],[20,60,230,40],[300,60,230,40],[20,130,600,280],[20,510,230,40],[300,510,230,40],[20,450,230,40],[300,450,230,40]];
   buttons.forEach((el,i)=>{const [x,y,width,height]=positions[i];el.getBoundingClientRect=()=>({x,y,left:x,top:y,width,height,right:x+width,bottom:y+height});});
   const dpad=code=>{let prevented=false,stopped=false;dialog.__direction({detail:{button:code},preventDefault(){prevented=true;},stopPropagation(){stopped=true;}});assert.ok(prevented&&stopped);assert.ok(dialog.contains(t.w.document.activeElement));};
   dpad(9);assert.ok(t.w.document.activeElement===t.el('Load installed settings'));
@@ -706,7 +722,7 @@ test('OptiScaler D-pad and Tab navigation stay in the editor and release the bac
   for(let i=0;i<10;i++)dpad(10);assert.ok(dialog.contains(t.w.document.activeElement));
   entry.__activate({stopPropagation(){}});assert.ok(t.w.document.activeElement===textarea);
   const arrow=new t.w.KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true,cancelable:true});textarea.dispatchEvent(arrow);assert.equal(arrow.defaultPrevented,false,'Keyboard arrows still edit the INI');
-  await t.key('Tab',textarea);assert.ok(t.w.document.activeElement===t.el('Close OptiScaler editor'), 'Focus expected on Close OptiScaler editor');
+  await t.key('Tab',textarea);assert.ok(t.w.document.activeElement===t.el('Open Steam keyboard'), 'Tab leaves text mode for the keyboard action');
   t.el('Save to draft').focus();await t.key('Tab');assert.ok(t.w.document.activeElement===t.el('Close OptiScaler editor'), 'Focus expected on Close OptiScaler editor');
   await t.key('Tab',t.w.document.activeElement);assert.ok(dialog.contains(t.w.document.activeElement));
   // Emulate Steam navigating a node despite the standard browser inert boundary.
@@ -771,5 +787,98 @@ test('Steam direction events stay inside every editor panel, including repeated 
    const keyboard=t.w.document.createElement('button');t.w.document.body.appendChild(keyboard);keyboard.focus();assert.equal(t.w.document.activeElement,keyboard);keyboard.remove();
    t.root.render(h('div',{'data-df-frame':true},h('button',{'data-test-background':true},'Background')));await settle();assert.equal(t.w.document.querySelector('[inert]'),null);background.focus();
   }
+ }finally{await t.close();}
+});
+
+test('A enters caret editing; D-pad moves the cursor, keeps focus and scrolls instead of leaving the text',{skip},async()=>{
+ const t=await host({guided:true,native:true,raw:false,prepare:optiEditorFixtures});try{
+  await reachUpscale(t);await t.click('Advanced OptiScaler settings');
+  const entry=t.el('Edit OptiScaler.ini'),dialog=t.w.document.querySelector('.df-opti-editor'),el=t.w.document.querySelector('textarea');
+  await typeIni(t,Array.from({length:70},(_,i)=>'Value'+i+'=abcdefghijk').join('\n'));entry.__activate({preventDefault(){},stopPropagation(){}});await settle();
+  assert.equal(t.w.document.activeElement,el);assert.equal(el.dataset.dfCaretActive,'true');assert.equal(el.tabIndex,0);
+  Object.defineProperty(el,'clientHeight',{configurable:true,value:72});el.setSelectionRange(6,6);const before=el.value;
+  for(let n=0;n<35;n++){const e=new t.w.CustomEvent('direction',{cancelable:true,detail:{button:10,is_repeat:n>0}});entry.__direction(e);assert.ok(e.defaultPrevented);assert.equal(t.w.document.activeElement,el);}
+  const line=t.w.__studio.studioLineAt(el.value,el.selectionStart);assert.equal(el.value.slice(0,line.start).split('\n').length-1,35);assert.ok(el.scrollTop>0);assert.equal(el.value,before);
+  // Native Steam may attempt to focus a button before emitting direction.
+  const control=t.el('Use guided settings');control.focus();assert.equal(t.w.document.activeElement,el);
+  for(let n=0;n<35;n++)entry.__direction(new t.w.CustomEvent('direction',{cancelable:true,detail:{button:9,is_repeat:true}}));assert.equal(el.selectionStart,6);assert.equal(el.scrollTop,0);
+  // B exits text mode before it can cancel the complete editor.
+  entry.__cancel({preventDefault(){},stopPropagation(){}});await settle();assert.equal(t.w.document.activeElement,entry);assert.equal(el.dataset.dfCaretActive,'false');assert.ok(dialog.isConnected);
+ }finally{await t.close();}
+});
+test('caret selection, vertical column, Unicode and duplicate Steam events preserve INI text',{skip},async()=>{
+ const t=await host({guided:true,raw:false,prepare:optiEditorFixtures});try{
+  await reachUpscale(t);await t.click('Advanced OptiScaler settings');await typeIni(t,'0123456789\nx\n0123456789\nA😀B');const el=t.w.document.querySelector('textarea'),entry=t.el('Edit OptiScaler.ini');entry.__activate({stopPropagation(){}});await settle();
+  el.setSelectionRange(8,8);const move=t.w.__studio.studioMoveCaret;
+  move(el,'down');assert.equal(el.selectionStart,12);move(el,'down');assert.equal(el.selectionStart,21,'Column survives a short line');
+  const emoji=el.value.indexOf('😀');el.setSelectionRange(emoji,emoji);move(el,'right');assert.equal(el.selectionStart,emoji+2,'Emoji is not split');move(el,'left');assert.equal(el.selectionStart,emoji);
+  el.setSelectionRange(2,7);move(el,'left');assert.equal(el.selectionStart,2);assert.equal(el.selectionEnd,2);
+  el.setSelectionRange(4,4);move(el,'right','button');const first=el.selectionStart;move(el,'right','direction');assert.equal(el.selectionStart,first,'One physical press moves once');
+ }finally{await t.close();}
+});
+test('Steam keyboard action uses the editor window manager after releasing browser mode and retains native values',{skip},async()=>{
+ const t=await host({guided:true,native:true,raw:false,keyboard:true,prepare:optiEditorFixtures});try{
+  await reachUpscale(t);await t.click('Advanced OptiScaler settings');const el=t.w.document.querySelector('textarea'),original=el.value,jobCount=jobs(t).length;
+  el.setSelectionRange(3,3);await t.click('Open Steam keyboard');assert.equal(t.w.document.activeElement,el);assert.equal(el.selectionStart,3);assert.deepEqual(t.rawState.keyboardRequests,[el]);assert.equal(t.rawState.keyboardUris.length,0);assert.equal(t.rawState.nativeCalls.at(-1),false);assert.ok(t.w.document.getElementById('virtual keyboard'));assert.equal(el.value,original);assert.equal(jobs(t).length,jobCount);await settle(80);t.rawState.dismissKeyboard();
+  // Text returned natively without React's change event must still be retained.
+  Object.getOwnPropertyDescriptor(t.w.HTMLTextAreaElement.prototype,'value').set.call(el,original.replace('SkipDxgiLoad=false','SkipDxgiLoad=true'));await settle(150);assert.match(el.value,/SkipDxgiLoad=true/);
+  // Save must also flush a native update that arrives before the next poll.
+  Object.getOwnPropertyDescriptor(t.w.HTMLTextAreaElement.prototype,'value').set.call(el,original.replace('SkipDxgiLoad=false','SkipDxgiLoad=auto'));t.el('Save to draft').click();await settle(40);assert.match(draft(t).opti.manual_ini,/SkipDxgiLoad=auto/);
+ }finally{await t.close();}
+});
+test('current-line Steam text field updates only that line; cancellation preserves the complete INI',{skip},async()=>{
+ const t=await host({guided:true,native:true,raw:false,prepare:optiEditorFixtures});try{
+  await reachUpscale(t);await t.click('Advanced OptiScaler settings');const el=t.w.document.querySelector('textarea'),original=el.value,index=original.indexOf('SkipDxgiLoad=false');el.setSelectionRange(index,index);await t.click('Edit line');
+  const popup=t.w.document.querySelector('[data-df-line-editor]'),input=popup.querySelector('[data-native-text-field] input');assert.ok(input,'Uses the native Steam TextField component');assert.equal(input.value,'SkipDxgiLoad=false');
+  const set=Object.getOwnPropertyDescriptor(t.w.HTMLInputElement.prototype,'value').set;set.call(input,'SkipDxgiLoad=true');t.el('Use edited line').click();await settle(40);assert.equal(el.value,original.replace('SkipDxgiLoad=false','SkipDxgiLoad=true'),'Native value is flushed even before a change event or poll');
+  const changed=el.value;await t.click('Edit line');await t.click('Cancel line edit');assert.equal(el.value,changed);await t.click('Save to draft');await settle(40);assert.equal(draft(t).opti.manual_ini,changed);
+ }finally{await t.close();}
+});
+test('B on first Game tab opens Quit confirmation; B cancels and A exits cleanly',{skip},async()=>{
+ const t=await host({guided:true,native:true,raw:false});try{
+  assert.equal(setupStep(t),'game');let frame=t.w.document.querySelector('[data-df-frame]');frame.__cancel({preventDefault(){},stopPropagation(){}});await settle();
+  let popup=t.w.document.querySelector('[aria-label="Quit Deck Fusion?"]');assert.ok(popup);assert.equal(t.w.document.activeElement,t.el('Quit'));assert.equal(jobs(t).length,0);
+  popup.__cancel({stopPropagation(){}});await settle();assert.equal(t.w.document.querySelector('[aria-label="Quit Deck Fusion?"]'),null);assert.equal(setupStep(t),'game');assert.equal(t.routeLog.at(-1),'/deck-fusion');
+  frame.__cancel({preventDefault(){},stopPropagation(){}});await settle();t.el('Quit').__activate({stopPropagation(){}});await settle();assert.equal(t.routeLog.at(-1),'/library/home');assert.equal(t.rawState.nativeCalls.at(-1),false);assert.equal(jobs(t).length,0);
+ }finally{await t.close();}
+});
+
+test('A and X from the editor open the native keyboard; its D-pad and B events cannot edit or close the INI',{skip},async()=>{
+ const t=await host({guided:true,native:true,raw:false,keyboard:true,prepare:optiEditorFixtures});try{
+  await reachUpscale(t);await t.click('Advanced OptiScaler settings');const el=t.w.document.querySelector('textarea'),entry=t.el('Edit OptiScaler.ini'),dialog=t.w.document.querySelector('.df-opti-editor'),frame=t.w.document.querySelector('[data-df-frame]');
+  el.setSelectionRange(4,4);entry.__activate(new t.w.CustomEvent('activate',{cancelable:true}));await settle(80);assert.equal(t.rawState.keyboardRequests.length,1);assert.equal(t.rawState.nativeCalls.at(-1),false);assert.equal(t.w.__studio.studioKeyboardVisible(t.w.document),true);
+  for(const target of [entry,dialog]){const event=new t.w.CustomEvent('direction',{cancelable:true,detail:{button:10}});target.__direction(event);assert.equal(event.defaultPrevented,false,'Steam keyboard owns direction navigation');}assert.equal(el.selectionStart,4);
+  for(const target of [entry,dialog,frame])target.__cancel(new t.w.CustomEvent('cancel',{cancelable:true}));await settle();assert.equal(el.dataset.dfCaretActive,'true');assert.ok(dialog.isConnected);assert.equal(setupStep(t),'upscale');
+  // Even a keyboard portal beneath the frame must be exempt from the focus trap.
+  const panel=t.w.document.getElementById('virtual keyboard');frame.appendChild(panel);const nativeKey=panel.querySelector('button');nativeKey.focus();assert.equal(t.w.document.activeElement,nativeKey);const original=el.value;nativeKey.click();await settle();assert.equal(el.value,original.slice(0,4)+'Z'+original.slice(4));assert.equal(t.rawState.nativeCalls.at(-1),false);
+  t.rawState.dismissKeyboard();await settle(150);entry.__secondary(new t.w.CustomEvent('secondary',{cancelable:true}));entry.__button(new t.w.CustomEvent('button',{cancelable:true,detail:{button:3}}));await settle(80);assert.equal(t.rawState.keyboardRequests.length,2,'Paired X callbacks request one keyboard');assert.equal(t.rawState.nativeCalls.at(-1),false);
+  t.rawState.dismissKeyboard();await settle(80);entry.__cancel(new t.w.CustomEvent('cancel',{cancelable:true}));await settle();assert.equal(t.w.document.activeElement,entry);assert.equal(el.dataset.dfCaretActive,'false');assert.equal(t.rawState.nativeCalls.at(-1),true,'Mouse mode returns only after leaving text mode');await settle(150);entry.__secondary(new t.w.CustomEvent('secondary',{cancelable:true}));await settle(80);assert.equal(t.rawState.keyboardRequests.length,3,'X also opens the keyboard from the highlighted editor before caret mode');
+ }finally{await t.close();}
+});
+test('focusing text releases browser mode for Steam + X, and a foreign window cannot receive the keyboard request',{skip},async()=>{
+ const t=await host({guided:true,native:true,raw:false,keyboard:true,prepare:optiEditorFixtures});try{
+  await reachUpscale(t);await t.click('Advanced OptiScaler settings');const el=t.w.document.querySelector('textarea');el.focus();await settle();assert.equal(t.rawState.nativeCalls.at(-1),false,'Steam shortcut remains in charge while text is focused');
+  t.rawState.keyboardManager.SetVirtualKeyboardVisible();await settle();assert.ok(t.w.document.getElementById('virtual keyboard'));t.rawState.dismissKeyboard();
+  let foreign=0;t.w.SteamUIStore.GetFocusedWindowInstance=()=>({BrowserWindow:{},VirtualKeyboardManager:{SetVirtualKeyboardVisible(){foreign++;}}});await t.click('Open Steam keyboard');assert.equal(foreign,0);assert.deepEqual(t.rawState.keyboardRequests,[el,el]);await settle(80);t.rawState.dismissKeyboard();
+  // Older native clients can expose the matching window via Decky's Router.
+  delete t.w.SteamUIStore;t.fields.Router={WindowStore:{GamepadUIMainWindowInstance:t.rawState.steamWindow,SteamUIWindows:[]}};await settle(150);await t.click('Open Steam keyboard');assert.equal(t.rawState.keyboardRequests.length,3);
+ }finally{await t.close();}
+});
+test('a keyboard request that never displays reports failure and keeps the draft; retry can recover',{skip},async()=>{
+ const t=await host({guided:true,native:true,raw:false,keyboard:true,keyboardAppears:false,prepare:optiEditorFixtures});try{
+  await reachUpscale(t);await t.click('Advanced OptiScaler settings');const el=t.w.document.querySelector('textarea'),before=el.value;await t.click('Open Steam keyboard');await settle(2100);
+  assert.match(t.w.document.querySelector('[role=alert]').textContent,/did not display/);assert.equal(el.value,before);assert.equal(el.dataset.dfKeyboardPending,undefined);assert.equal(draft(t).opti.manual_ini||'','');assert.equal(t.rawState.keyboardUris.length,0);
+  t.rawState.keyboardManager.SetVirtualKeyboardVisible=()=>{const panel=t.w.document.createElement('div');panel.id='virtual keyboard';t.w.document.body.appendChild(panel);};await t.click('Open Steam keyboard');await settle(80);assert.equal(t.w.document.querySelector('[role=alert]'),null);
+ }finally{await t.close();}
+});
+test('missing and throwing native keyboard managers report an error without falling back to an external URI',{skip},async()=>{
+ const t=await host({guided:true,native:true,raw:false,prepare:optiEditorFixtures});try{
+  await reachUpscale(t);await t.click('Advanced OptiScaler settings');const el=t.w.document.querySelector('textarea');await t.click('Open Steam keyboard');assert.match(t.w.document.querySelector('[role=alert]').textContent,/unavailable in this window/);assert.equal(el.dataset.dfKeyboardPending,undefined);
+  t.w.SteamUIStore={ActiveWindowInstance:{BrowserWindow:t.w,VirtualKeyboardManager:{SetVirtualKeyboardVisible(){throw Error('test failure');}}}};await settle(150);await t.click('Open Steam keyboard');assert.match(t.w.document.querySelector('[role=alert]').textContent,/could not open/);assert.equal(t.rawState.keyboardUris.length,0);assert.equal(el.dataset.dfKeyboardPending,undefined);
+ }finally{await t.close();}
+});
+test('line editor X uses the same native manager and allows saving after the keyboard closes',{skip},async()=>{
+ const t=await host({guided:true,native:true,raw:false,keyboard:true,prepare:optiEditorFixtures});try{
+  await reachUpscale(t);await t.click('Advanced OptiScaler settings');const el=t.w.document.querySelector('textarea'),index=el.value.indexOf('SkipDxgiLoad=false');el.setSelectionRange(index,index);await t.click('Edit line');const dialog=t.w.document.querySelector('[data-df-line-editor]'),input=dialog.querySelector('input');dialog.__secondary(new t.w.CustomEvent('secondary',{cancelable:true}));await settle(80);assert.deepEqual(t.rawState.keyboardRequests,[input]);assert.equal(input.dataset.dfCaretActive,undefined,'Native line input must not inherit the full INI caret trap');assert.equal(t.rawState.nativeCalls.at(-1),false);t.rawState.dismissKeyboard();await settle(80);t.el('Use edited line').focus();assert.equal(t.w.document.activeElement,t.el('Use edited line'));await t.click('Use edited line');assert.equal(t.w.document.querySelector('[data-df-line-editor]'),null);
  }finally{await t.close();}
 });

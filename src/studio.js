@@ -1,4 +1,4 @@
-/* Deck Fusion Studio v0.3-beta10. Local UI only; all mutations use the existing Manager. */
+/* Deck Fusion Studio v0.3-beta12. Local UI only; all mutations use the existing Manager. */
 const STUDIO_TABS=[
  ['library','Library','grid'], ['lsfg','Motion','wave'],
  ['opti','Upscaling','layers'], ['reshade','ReShade','spark'],
@@ -69,6 +69,125 @@ function studioMoveFocus(root,direction){
  const scored=all.filter(x=>x!==active).map(el=>{const b=el.getBoundingClientRect(),bx=b.x+b.width/2-ax,by=b.y+b.height/2-ay;const forward=bx*dx+by*dy,cross=Math.abs(bx*dy-by*dx);return {el,forward,score:forward+cross*2.5};}).filter(x=>x.forward>4).sort((a,b)=>a.score-b.score);
  scored[0]?.el.focus({preventScroll:true});
 }
+// Text offsets are UTF-16, as required by selectionStart/selectionEnd.
+const studioCaretState=new WeakMap();
+function studioLineAt(text,offset){const start=offset?text.lastIndexOf('\n',offset-1)+1:0,end=text.indexOf('\n',offset);return {start,end:end<0?text.length:end};}
+function studioTextOffsets(text){
+ const result=[0];let offset=0;
+ const parts=typeof Intl.Segmenter==='function'?[...new Intl.Segmenter(undefined,{granularity:'grapheme'}).segment(text)].map(x=>x.segment):Array.from(text);
+ for(const part of parts){offset+=part.length;result.push(offset);}return result;
+}
+function studioScrollCaret(el){
+ const view=el.ownerDocument.defaultView,style=view.getComputedStyle(el),line=studioLineAt(el.value,el.selectionEnd),before=el.value.slice(0,line.start);
+ const height=parseFloat(style.lineHeight)||parseFloat(style.fontSize)*1.4||18,top=parseFloat(style.paddingTop)||0;
+ const row=before.split('\n').length-1,y=top+row*height;
+ if(y<el.scrollTop+top)el.scrollTop=Math.max(0,y-top);else if(y+height>el.scrollTop+el.clientHeight-top)el.scrollTop=Math.max(0,y+height-el.clientHeight+top);
+ let column=0;for(const c of Array.from(el.value.slice(line.start,el.selectionEnd)))column=c==='\t'?column+(4-column%4):column+1;
+ const x=(parseFloat(style.paddingLeft)||0)+column*(parseFloat(style.fontSize)||12)*.61;
+ if(x<el.scrollLeft)el.scrollLeft=Math.max(0,x-8);else if(x+10>el.scrollLeft+el.clientWidth)el.scrollLeft=Math.max(0,x+20-el.clientWidth);
+}
+function studioMoveCaret(el,direction,channel='direction'){
+ if(!el||el.disabled||el.readOnly||el.ownerDocument.activeElement!==el)return;
+ const now=el.ownerDocument.defaultView.performance.now(),previous=studioCaretState.get(el)||{};
+ // Steam can emit a button event followed by a direction event for one press.
+ if(previous.direction===direction&&previous.channel!==channel&&now-previous.time<60)return;
+ const text=el.value,start=el.selectionStart,end=el.selectionEnd;
+ let pos=start,column=null;
+ if(direction==='left'||direction==='right'){
+  const offsets=studioTextOffsets(text),anchor=direction==='left'?start:end;
+  pos=start!==end?anchor:direction==='left'?(offsets.filter(x=>x<anchor).at(-1)??0):(offsets.find(x=>x>anchor)??text.length);
+ }else{
+  const anchor=el.selectionDirection==='backward'?start:end,line=studioLineAt(text,anchor);
+  const offsets=studioTextOffsets(text.slice(line.start,line.end)),local=anchor-line.start;
+  column=previous.value===text&&previous.position===anchor&&previous.column!==null&&previous.column!==undefined?previous.column:Math.max(0,offsets.findIndex(x=>x>=local));
+  const next=direction==='up'?(line.start?studioLineAt(text,line.start-1):line):(line.end<text.length?studioLineAt(text,line.end+1):line);
+  const target=studioTextOffsets(text.slice(next.start,next.end));pos=next.start+target[Math.min(column,target.length-1)];
+ }
+ el.setSelectionRange(pos,pos);studioCaretState.set(el,{position:pos,column,value:text,direction,channel,time:now});studioScrollCaret(el);
+ el.dispatchEvent(new el.ownerDocument.defaultView.Event('select',{bubbles:true}));
+}
+function studioKeyboardVisible(doc){
+ const el=doc?.getElementById('virtual keyboard');if(!el?.isConnected)return false;
+ const style=doc.defaultView.getComputedStyle(el),r=el.getBoundingClientRect();
+ return r.width>0&&r.height>0&&style.display!=='none'&&style.visibility!=='hidden'&&!el.closest('[hidden],[aria-hidden=true]');
+}
+function studioKeyboardOwnsInput(root){return studioKeyboardVisible(root?.ownerDocument)||!!root?.querySelector('[data-df-keyboard-pending=true]');}
+function studioTextMode(el,active){
+ if(!el)return;el.dataset.dfCaretActive=String(active);
+ el.dispatchEvent(new el.ownerDocument.defaultView.Event('df-text-mode',{bubbles:true}));
+}
+function studioKeyboardManager(el){
+ const view=el.ownerDocument.defaultView,windows=[];
+ // Decky's module window can differ from the window rendering the editor.
+ for(const store of [view.SteamUIStore,globalThis.SteamUIStore]){
+  try{windows.push(store?.GetFocusedWindowInstance?.());}catch{}
+  try{windows.push(store?.ActiveWindowInstance);}catch{}
+ }
+ const store=U.Router?.WindowStore;windows.push(store?.GamepadUIMainWindowInstance,...(store?.SteamUIWindows||[]),...(store?.OverlayWindows||[]));
+ return windows.find(win=>win?.BrowserWindow===view&&typeof win.VirtualKeyboardManager?.SetVirtualKeyboardVisible==='function')?.VirtualKeyboardManager;
+}
+function studioOpenKeyboard(el,report){
+ if(!el||el.disabled){report('Select an editable text field first.');return()=>{};}
+ const view=el.ownerDocument.defaultView;let timer=null,stopped=false;
+ el.dataset.dfKeyboardPending='true';if(el.hasAttribute('data-df-text-edit'))studioTextMode(el,true);else el.dispatchEvent(new view.Event('df-text-mode',{bubbles:true}));el.focus({preventScroll:true});
+ const clear=()=>{if(timer!==null)view.clearTimeout(timer);timer=null;delete el.dataset.dfKeyboardPending;el.dispatchEvent(new view.Event('df-text-mode',{bubbles:true}));};
+ const cancel=()=>{stopped=true;clear();};
+ const manager=studioKeyboardManager(el);
+ if(!manager){clear();report('Steam’s keyboard is unavailable in this window.');console.warn('[Deck Fusion] No VirtualKeyboardManager for the editor window.');return cancel;}
+ try{manager.SetVirtualKeyboardVisible();}catch(error){clear();report('Steam could not open its keyboard.');console.warn('[Deck Fusion] Native keyboard request failed.',error);return cancel;}
+ // A void API return does not prove that a keyboard appeared. Check Steam's
+ // real keyboard element, and surface a failure instead of silently succeeding.
+ const started=view.performance.now();
+ const check=()=>{
+  if(stopped||!el.isConnected){cancel();return;}
+  if(studioKeyboardVisible(el.ownerDocument)){clear();report('');return;}
+  if(view.performance.now()-started>=2000){clear();report('Steam did not display its keyboard. Your editor text is retained.');return;}
+  timer=view.setTimeout(check,50);
+ };
+ timer=view.setTimeout(check,50);return cancel;
+}
+function studioEndTextEditing(root){const el=root?.ownerDocument.activeElement;if(!root?.contains(el)||typeof el?.dfEndEditing!=='function')return false;el.dfEndEditing();return true;}
+function StudioTextEditor({label,value,onChange,disabled=false,raw=false,entryRef,editorRef}){
+ const ownEntry=useRef(null),ownEditor=useRef(null),entry=entryRef||ownEntry,editor=editorRef||ownEditor;
+ const [editing,setEditing]=useState(false),[keyboardError,setKeyboardError]=useState(''),[line,setLine]=useState(null),lastKeyboard=useRef(-Infinity),keyboardRequest=useRef(null);
+ const live=useRef({value,onChange,disabled});live.current={value,onChange,disabled};
+ const begin=event=>{event?.preventDefault?.();event?.stopPropagation?.();if(disabled)return;studioTextMode(editor.current,true);setEditing(true);editor.current?.focus({preventScroll:true});};
+ const end=()=>{keyboardRequest.current?.();studioTextMode(editor.current,false);setEditing(false);entry.current?.focus({preventScroll:true});};
+ const keyboard=()=>{if(disabled)return;const now=editor.current?.ownerDocument.defaultView.performance.now()||0;if(now-lastKeyboard.current<120)return;lastKeyboard.current=now;begin();keyboardRequest.current?.();setKeyboardError('');keyboardRequest.current=studioOpenKeyboard(editor.current,setKeyboardError);};
+ const editLine=()=>{if(disabled)return;const el=editor.current,bounds=studioLineAt(el.value,el.selectionStart);setLine({...bounds,value:el.value.slice(bounds.start,bounds.end)});};
+ useEffect(()=>{
+  const el=editor.current;if(!el)return;el.dfEndEditing=end;
+  // Steam's native OSK can update a DOM value without React's change event.
+  const sync=()=>{if(!live.current.disabled&&el.value!==live.current.value)live.current.onChange(el.value);};
+  el.addEventListener('input',sync);el.addEventListener('change',sync);
+  const timer=el.ownerDocument.defaultView.setInterval(()=>{if(el.isConnected&&el.ownerDocument.visibilityState!=='hidden')sync();},120);
+  return()=>{keyboardRequest.current?.();delete el.dfEndEditing;el.removeEventListener('input',sync);el.removeEventListener('change',sync);el.ownerDocument.defaultView.clearInterval(timer);};
+ },[]);
+ const direction=(event,channel)=>{if(studioKeyboardOwnsInput(entry.current))return;const dir={9:'up',10:'down',11:'left',12:'right'}[event.detail?.button];if(editor.current?.dataset.dfCaretActive==='true'&&dir&&entry.current?.contains(editor.current.ownerDocument.activeElement)){event.preventDefault?.();event.stopPropagation?.();event.stopImmediatePropagation?.();editor.current.focus({preventScroll:true});studioMoveCaret(editor.current,dir,channel);}};
+ const applyLine=next=>{
+  if(!line)return;const text=editor.current.value.slice(0,line.start)+next+editor.current.value.slice(line.end);onChange(text);setLine(null);
+  editor.current.ownerDocument.defaultView.requestAnimationFrame(()=>{editor.current?.focus({preventScroll:true});editor.current?.setSelectionRange(line.start+next.length,line.start+next.length);setEditing(true);});
+ };
+ return h('div',{className:'df-text-editor',style:{display:'flex',flexDirection:'column',flex:1,minHeight:0,gap:6}},
+  h(U.Focusable,{ref:entry,role:'group','aria-label':`Edit ${label}`,'data-df-focus':true,tabIndex:disabled?-1:0,'aria-disabled':disabled||undefined,'data-df-editing':editing,focusClassName:'df-native-focus',onActivate:event=>{if(studioKeyboardOwnsInput(entry.current))return;event?.preventDefault?.();event?.stopPropagation?.();keyboard();},onSecondaryButton:event=>{if(studioKeyboardOwnsInput(entry.current))return;event?.preventDefault?.();event?.stopPropagation?.();keyboard();},onCancel:event=>{if(studioKeyboardOwnsInput(entry.current))return;if(editing){event?.preventDefault?.();event?.stopPropagation?.();end();}},onGamepadDirection:event=>direction(event,'direction'),onButtonDown:event=>{direction(event,'button');if(event.detail?.button===3&&!studioKeyboardOwnsInput(entry.current)){event.preventDefault?.();event.stopPropagation?.();keyboard();}},style:{display:'flex',flex:1,minHeight:0}},
+   h(raw?'textarea':'input',{ref:editor,'aria-label':label,'data-df-scroll':raw||undefined,'data-df-text-edit':true,tabIndex:editing?0:-1,wrap:raw?'off':undefined,spellCheck:false,disabled,value,onFocus:()=>{studioTextMode(editor.current,true);setEditing(true);},onChange:event=>onChange(event.target.value),onKeyDown:event=>{if(event.key==='Escape'&&!studioKeyboardOwnsInput(entry.current)){event.preventDefault();event.stopPropagation();end();}},style:{flex:1,minHeight:raw?50:36,width:'100%',resize:'none',fontFamily:raw?'monospace':undefined,fontSize:raw?12:undefined,lineHeight:1.4,whiteSpace:raw?'pre':undefined,tabSize:4,overflow:'auto'}})),
+  h('div',{className:'df-overlay-foot'},h('span',{className:'df-subtle'},editing?'D-pad: cursor · A / X: keyboard · B: controls':'A / X: edit and open keyboard'),h(StudioButton,{disabled,onClick:keyboard},'Open Steam keyboard'),raw&&h(StudioButton,{disabled,onClick:editLine},'Edit line')),
+  keyboardError&&h('div',{role:'alert',className:'df-subtle'},keyboardError),
+  line&&h(StudioLineEditor,{value:line.value,save:applyLine,cancel:()=>{setLine(null);editor.current?.focus({preventScroll:true});},label:`${label} · line ${editor.current.value.slice(0,line.start).split('\n').length}`}));
+}
+function StudioLineEditor({value,save,cancel,label}){
+ const root=useRef(null),[text,setText]=useState(value),[keyboardError,setKeyboardError]=useState(''),focus=useStudioDialogFocus(root),latest=useRef(text),keyboardRequest=useRef(null);latest.current=text;
+ const keyboard=()=>{const el=root.current?.querySelector('input');keyboardRequest.current?.();setKeyboardError('');keyboardRequest.current=studioOpenKeyboard(el,setKeyboardError);};
+ useEffect(()=>()=>keyboardRequest.current?.(),[]);
+ useEffect(()=>{const el=root.current?.querySelector('input'),view=el?.ownerDocument.defaultView;if(!view)return;const sync=()=>{if(el.value!==latest.current)setText(el.value);};el.addEventListener('input',sync);const timer=view.setInterval(sync,120);return()=>{el.removeEventListener('input',sync);view.clearInterval(timer);};},[]);
+ useEffect(()=>{const el=root.current?.querySelector('input');el?.focus({preventScroll:true});},[]);
+ return h(U.Focusable,{ref:root,...focus,className:'df-overlay',role:'dialog','aria-modal':true,'data-df-overlay':true,'data-df-line-editor':true,'aria-label':'Edit current line',onKeyDownCapture:event=>{if(studioKeyboardOwnsInput(root.current))return;if(event.key==='Escape'){event.preventDefault();event.stopPropagation();cancel();}else focus.onKeyDownCapture(event);},onActivate:event=>{if(studioKeyboardOwnsInput(root.current))return;event?.stopPropagation?.();keyboard();},onSecondaryButton:event=>{if(studioKeyboardOwnsInput(root.current))return;event?.stopPropagation?.();keyboard();},onCancel:event=>{if(studioKeyboardOwnsInput(root.current))return;event?.stopPropagation?.();cancel();}},
+  h('h2',null,'Edit current line'),h('div',{className:'df-subtle'},label),
+  h(U.TextField||'input',{'aria-label':'Current line',label:'Current line',value:text,onChange:event=>setText(event.target.value),focusOnMount:true}),
+  h('div',{className:'df-subtle'},'Press A in the Steam text field to open its keyboard.'),
+  keyboardError&&h('div',{role:'alert',className:'df-subtle'},keyboardError),
+  h('div',{className:'df-overlay-foot'},h(StudioButton,{onClick:cancel},'Cancel line edit'),h(StudioButton,{onClick:()=>save(root.current?.querySelector('input')?.value??text)},'Use edited line')));
+}
 /* Steam emits direction navigation separately from button presses. Consume that
    navigation event at the dialog, including at an edge with no next control. */
 function useStudioDialogFocus(root,{entry,editor}={}){
@@ -85,6 +204,9 @@ function useStudioDialogFocus(root,{entry,editor}={}){
    (valid?target:studioFocusable(dialog)[0]||dialog).focus({preventScroll:true});
   };
   const focus=event=>{
+   if(event.target.closest('[id="virtual keyboard"]'))return;
+   const caret=dialog.querySelector('[data-df-caret-active=true]');
+   if(!redirecting&&caret&&!event.target.closest('[id="virtual keyboard"]')&&frame.contains(event.target)&&event.target!==caret&&!event.target.closest('[data-df-line-editor]')){redirecting=true;caret.focus({preventScroll:true});redirecting=false;return;}
    if(dialog.contains(event.target)){last.current=event.target;return;}
    // Allow Steam's own menus and on-screen keyboard outside the plugin frame.
    if(!redirecting&&frame.contains(event.target)){redirecting=true;restore();redirecting=false;}
@@ -97,12 +219,13 @@ function useStudioDialogFocus(root,{entry,editor}={}){
   const dialog=root.current,doc=dialog?.ownerDocument,frame=dialog?.closest('[data-df-frame]');if(!dialog||!frame)return;
   // Filtering or disabling controls can remove the focused node. Recover in
   // the panel without stealing focus from Steam's keyboard or menus.
-  if(doc.activeElement===doc.body||(frame.contains(doc.activeElement)&&!dialog.contains(doc.activeElement)))(studioFocusable(dialog)[0]||dialog).focus({preventScroll:true});
+  if(!studioKeyboardOwnsInput(dialog)&&(doc.activeElement===doc.body||(frame.contains(doc.activeElement)&&!dialog.contains(doc.activeElement))))(studioFocusable(dialog)[0]||dialog).focus({preventScroll:true});
  });
  const consume=event=>{event.preventDefault?.();event.stopPropagation?.();};
  const move=direction=>{
-  const dialog=root.current;if(!dialog)return;
-  if(editor?.current&&dialog.ownerDocument.activeElement===editor.current)entry?.current?.focus({preventScroll:true});
+  const dialog=root.current;if(!dialog||studioKeyboardOwnsInput(dialog))return;
+  const field=dialog.ownerDocument.activeElement;
+  if(field?.hasAttribute('data-df-text-edit')&&dialog.contains(field)){studioMoveCaret(field,direction);return;}
   const all=studioFocusable(dialog),active=dialog.ownerDocument.activeElement;
   if(!all.includes(active)){(all[0]||dialog).focus({preventScroll:true});return;}
   const a=active.getBoundingClientRect(),vertical=['up','down'].includes(direction),sign=['up','left'].includes(direction)?-1:1;
@@ -117,11 +240,13 @@ function useStudioDialogFocus(root,{entry,editor}={}){
  };
  return {
   tabIndex:-1,
-  onGamepadDirection:event=>{const direction={9:'up',10:'down',11:'left',12:'right'}[event.detail?.button];if(direction){consume(event);move(direction);}},
+  onGamepadDirection:event=>{if(studioKeyboardOwnsInput(root.current))return;const direction={9:'up',10:'down',11:'left',12:'right'}[event.detail?.button];if(direction){consume(event);move(direction);}},
   // Direction events own focus. Shoulder buttons cannot reach route tabs.
-  onButtonDown:event=>{if(event.detail?.button>=5&&event.detail?.button<=8)consume(event);},
+  onButtonDown:event=>{if(studioKeyboardOwnsInput(root.current))return;const field=root.current?.ownerDocument.activeElement,dir={9:'up',10:'down',11:'left',12:'right'}[event.detail?.button];if(dir&&field?.hasAttribute('data-df-text-edit')&&root.current.contains(field)){consume(event);studioMoveCaret(field,dir,'button');}else if(event.detail?.button>=5&&event.detail?.button<=8)consume(event);},
   onKeyDownCapture:event=>{
+   if(studioKeyboardOwnsInput(root.current))return;
    if(event.key==='Tab'){
+    const active=root.current?.ownerDocument.activeElement;active?.dfEndEditing?.();
     const dialog=root.current,all=studioFocusable(dialog),index=all.indexOf(dialog.ownerDocument.activeElement),next=event.shiftKey?(index<=0?all.length-1:index-1):(index+1)%all.length;
     consume(event);(all[next]||dialog).focus({preventScroll:true});
    }else if(!event.target.matches('input:not([type=range]),textarea')){
@@ -139,11 +264,11 @@ function useStudioInput(frameRef,cursorRef,actions){
   const frame=frameRef.current,doc=frame?.ownerDocument,view=doc?.defaultView;if(!view)return;
   let disposed=false,subscription=null,controllerList=null,raf=null,lastTime=0,lastPacket=0,buttons=0,previousPad=null,pointer={x:200,y:160},stick={x:0,y:0},hover=null,controller=null;
   const ownedModal=()=>doc.querySelector('[data-df-owned-dialog]')?.closest('.df-owned-modal,[role=dialog]');
-  const scope=()=>ownedModal()||frame.querySelector('[data-df-overlay]')||frame;
+  const scope=()=>ownedModal()||[...frame.querySelectorAll('[data-df-overlay]')].at(-1)||frame;
   const scrollPane=()=>scope().querySelector('[data-df-scroll]');
   // A DOM-owned cursor lives above Decky's modal portal and is removed on teardown.
   const cursor=doc.createElement('div');cursor.setAttribute('aria-hidden','true');cursor.style.cssText='position:fixed;z-index:2147483000;pointer-events:none;display:none;left:0;top:0;filter:drop-shadow(0 2px 3px #000)';cursor.innerHTML='<svg width=22 height=26 viewBox="0 0 22 26"><path d="M2 1v21l6-6 5 9 4-2-5-9h8z" fill="white" stroke="#172233" stroke-width="1.4"/></svg>';doc.body.appendChild(cursor);
-  const available=()=>!disposed&&frame.isConnected&&doc.visibilityState!=='hidden'&&(!doc.hasFocus||doc.hasFocus())&&frame.getBoundingClientRect().width>0;
+  const available=()=>!studioKeyboardOwnsInput(frame)&&!disposed&&frame.isConnected&&doc.visibilityState!=='hidden'&&(!doc.hasFocus||doc.hasFocus())&&frame.getBoundingClientRect().width>0;
   const paint=()=>{const r=frame.getBoundingClientRect(),scale=r.width/frame.offsetWidth||1;cursor.style.display='block';cursor.style.transform=`translate(${r.left+pointer.x*scale}px,${r.top+pointer.y*scale}px)`;};
   const atPointer=()=>{const r=frame.getBoundingClientRect(),scale=r.width/frame.offsetWidth||1;const target=doc.elementFromPoint(r.left+pointer.x*scale,r.top+pointer.y*scale);return target&&scope().contains(target)?target:null;};
   const move=(dx,dy)=>{pointer.x=clampNumber(pointer.x+dx,4,frame.clientWidth-18);pointer.y=clampNumber(pointer.y+dy,4,frame.clientHeight-18);paint();const next=atPointer()?.closest('[data-df-focus],button,[role=button],input,textarea');if(hover!==next){hover?.removeAttribute('data-pointer-hover');hover=next;hover?.setAttribute('data-pointer-hover','true');}};
@@ -154,7 +279,7 @@ function useStudioInput(frameRef,cursorRef,actions){
   const key=e=>{
    if(e.defaultPrevented||!available()||!scope().contains(e.target))return;
    const editing=e.target.matches('input:not([type=range]),textarea');
-   if(e.key==='Escape'){if(ownedModal())return;e.preventDefault();e.stopPropagation();live.current.back();return;}
+   if(e.key==='Escape'){if(ownedModal())return;e.preventDefault();e.stopPropagation();if(!studioEndTextEditing(scope()))live.current.back();return;}
    if(editing)return;
    const direction={ArrowLeft:'left',ArrowRight:'right',ArrowUp:'up',ArrowDown:'down'}[e.key];
    if(direction&&!(e.target.matches('input[type=range]')&&['left','right'].includes(direction))){e.preventDefault();e.stopPropagation();studioMoveFocus(scope(),direction);}
@@ -168,11 +293,11 @@ function useStudioInput(frameRef,cursorRef,actions){
   const rawInput=candidates.find(x=>typeof x.RegisterForControllerStateChanges==='function');
   let nativeEnabled=false,nativeSupported=typeof input?.SetWebBrowserActionset==='function',windowActive=true;
   const setNative=enabled=>{if(!nativeSupported||enabled===nativeEnabled)return;try{input.SetWebBrowserActionset(enabled);nativeEnabled=enabled;}catch{nativeSupported=false;}};
-  const syncNative=()=>{const focused=doc.activeElement;setNative(windowActive&&frame.isConnected&&doc.visibilityState!=='hidden'&&(!focused||focused===doc.body||frame.contains(focused)||!!ownedModal()?.contains(focused)));};
+  const syncNative=()=>{const focused=doc.activeElement,textMode=!!frame.querySelector('[data-df-caret-active=true]')||(frame.contains(focused)&&focused?.matches('input:not([type=range]),textarea,[contenteditable=true]'));setNative(!textMode&&!studioKeyboardOwnsInput(frame)&&windowActive&&frame.isConnected&&doc.visibilityState!=='hidden'&&(!focused||focused===doc.body||frame.contains(focused)||!!ownedModal()?.contains(focused)));};
   const resetStick=()=>{stick={x:0,y:0};controller=null;previousPad=null;buttons=0;};
   const blur=()=>{windowActive=false;resetStick();setNative(false);physical();};
   const focus=()=>{windowActive=true;syncNative();};
-  view.addEventListener('blur',blur);view.addEventListener('focus',focus);doc.addEventListener('visibilitychange',syncNative);doc.addEventListener('focusin',syncNative);
+  view.addEventListener('blur',blur);view.addEventListener('focus',focus);doc.addEventListener('visibilitychange',syncNative);doc.addEventListener('focusin',syncNative);doc.addEventListener('df-text-mode',syncNative);
   syncNative();
   try{if(typeof rawInput?.RegisterForControllerStateChanges==='function')subscription=rawInput.RegisterForControllerStateChanges(changes=>{
    if(!available()){previousPad=null;stick={x:0,y:0};buttons=0;return;}
@@ -192,7 +317,7 @@ function useStudioInput(frameRef,cursorRef,actions){
   try{controllerList=rawInput?.RegisterForControllerListChanges?.(resetStick);}catch{}
   const tick=now=>{if(disposed)return;const dt=Math.min(32,now-lastTime||16);lastTime=now;const pane=scrollPane();if(!available()||pane?.dataset.dfNativeScroll==='true'||(!pane&&now-lastPacket>250))resetStick();if(available()&&(stick.x||stick.y)){if(pane&&(scope().contains(doc.activeElement)||doc.activeElement===doc.body)){pane.scrollTop+=stick.y*dt*.65;pane.dataset.dfRawScroll=String(now);}else if(!nativeSupported)move(stick.x*dt*.7,stick.y*dt*.7);}raf=view.requestAnimationFrame(tick);};
   if(subscription)raf=view.requestAnimationFrame(tick);
-  return()=>{disposed=true;setNative(false);view.removeEventListener('blur',blur);view.removeEventListener('focus',focus);doc.removeEventListener('visibilitychange',syncNative);doc.removeEventListener('focusin',syncNative);try{subscription?.unregister?.();controllerList?.unregister?.();}catch{}if(raf!==null)view.cancelAnimationFrame(raf);doc.removeEventListener('keydown',key);doc.removeEventListener('pointermove',physical);hover?.removeAttribute('data-pointer-hover');cursor.remove();};
+  return()=>{disposed=true;setNative(false);view.removeEventListener('blur',blur);view.removeEventListener('focus',focus);doc.removeEventListener('visibilitychange',syncNative);doc.removeEventListener('focusin',syncNative);doc.removeEventListener('df-text-mode',syncNative);try{subscription?.unregister?.();controllerList?.unregister?.();}catch{}if(raf!==null)view.cancelAnimationFrame(raf);doc.removeEventListener('keydown',key);doc.removeEventListener('pointermove',physical);hover?.removeAttribute('data-pointer-hover');cursor.remove();};
  },[]);
 }
 function StudioField({item,open,disabled}){
@@ -264,13 +389,13 @@ function StudioOverlay({model,close,short,narrow,pageRef}){
  pageRef.current=direction=>setPage(x=>clampNumber(x+direction,0,count-1));
  useEffect(()=>{const el=root.current;if(!el)return;const first=studioFocusable(el)[0];first?.focus({preventScroll:true});},[]);
  useEffect(()=>{const el=root.current;if(el&&!el.contains(el.ownerDocument.activeElement))studioFocusable(optionsRef.current||el)[0]?.focus({preventScroll:true});},[current,perPage,query]);
- const confirm=()=>{if(model.type==='edit')model.save(value);if(model.type==='range')model.item.props.onChange(Number(range));close();};
- return h(U.Focusable,{'data-df-overlay':true,ref:root,...dialogFocus,className:'df-overlay',role:'dialog','aria-modal':true,'aria-label':model.title||model.item?.label,onCancel:e=>{e?.stopPropagation?.();close();}},
+ const confirm=()=>{if(model.type==='edit')model.save(root.current?.querySelector('[data-df-text-edit]')?.value??value);if(model.type==='range')model.item.props.onChange(Number(range));close();};
+ return h(U.Focusable,{'data-df-overlay':true,ref:root,...dialogFocus,className:'df-overlay',role:'dialog','aria-modal':true,'aria-label':model.title||model.item?.label,onCancel:e=>{if(studioKeyboardOwnsInput(root.current))return;e?.stopPropagation?.();if(!studioEndTextEditing(root.current))close();}},
   h('div',{className:'df-overlay-head'},h('div',null,h('h2',null,model.title||model.item?.label)),h(StudioButton,{onClick:close,'aria-label':'Close panel',className:'df-icon'},studioIcon('close'))),
   h('div',{className:'df-overlay-body'},
    model.type==='select'&&h(R.Fragment,null,h('input',{'aria-label':'Filter options',placeholder:'Search options…',value:query,onChange:e=>{setQuery(e.target.value);setPage(0);}}),h('div',{className:'df-options',ref:optionsRef},list.slice(current*perPage,(current+1)*perPage).map((x,i)=>h(StudioButton,{key:String(x.data)+i,className:'df-option','data-selected':x.data===model.value,onClick:()=>{model.choose(x);close();}},h('span',null,x.label),x.data===model.value?studioIcon('check',18):studioIcon('arrow',16))),!list.length&&h('div',{className:'df-empty'},'No matching options.'))),
    model.type==='reader'&&h('div',{ref:reader,className:'df-reader','data-df-reader':true},chunks[current]),
-   model.type==='edit'&&h(R.Fragment,null,h('div',{className:'df-subtle'},'Changes stay in your draft until you apply. Use your keyboard, or Steam + X for the on-screen keyboard.'),model.raw?h('textarea',{'aria-label':model.title,value,spellCheck:false,onChange:e=>setValue(e.target.value)}):h('input',{'aria-label':model.title,value,onChange:e=>setValue(e.target.value),onKeyDown:e=>{if(e.key==='Enter')confirm();}})),
+   model.type==='edit'&&h(R.Fragment,null,h('div',{className:'df-subtle'},'Changes stay in your draft until you apply.'),h(StudioTextEditor,{label:model.title,value,onChange:setValue,raw:!!model.raw})),
    model.type==='range'&&h(R.Fragment,null,h('div',{className:'df-reader'},h('div',{className:'df-range-value',style:{fontSize:48,marginBottom:16}},Number(range).toFixed(Number.isInteger(Number(range))?0:2)),h('input',{type:'range','aria-label':model.item.label,min:model.item.props.min,max:model.item.props.max,step:model.item.props.step,value:range,onChange:e=>setRange(Number(e.target.value))}),h('div',{className:'df-range',style:{marginTop:12}},h(StudioButton,{onClick:()=>setRange(x=>clampNumber(Number((x-model.item.props.step).toFixed(5)),model.item.props.min,model.item.props.max))},'− Decrease'),h(StudioButton,{onClick:()=>setRange(x=>clampNumber(Number((x+model.item.props.step).toFixed(5)),model.item.props.min,model.item.props.max))},'+ Increase'))))),
   h('div',{className:'df-overlay-foot'},(model.type==='edit'||model.type==='range')?h(R.Fragment,null,h(StudioButton,{onClick:close},'Cancel'),h(StudioButton,{className:'df-primary',onClick:confirm},'Save to draft')):h(R.Fragment,null,h(StudioButton,{disabled:current===0,onClick:()=>setPage(x=>Math.max(0,x-1))},'Previous'),h('span',{className:'df-page-count','aria-live':'polite'},`${current+1} / ${count}`),h(StudioButton,{disabled:current>=count-1,onClick:()=>setPage(x=>x+1)},'Next'))));
 }
@@ -297,8 +422,8 @@ function Studio({frameRef,frameHeight,tabs,tab,setTab,p,dirty,busy,message,error
  const navEvent=e=>{const code=e.detail?.button;if([5,6,7,8].includes(code)){e.stopPropagation();e.preventDefault?.();if(code===5||code===6)changeTab(code===5?-1:1);else changePage(code===7?-1:1);}else if(code===2&&overlay){e.stopPropagation();close();}};
  const pageTitle=index=>controls[index*pageSize]?.label||'Overview';
  const notesText=inventory.notes.map((x,i)=>`${String(i+1).padStart(2,'0')} / ${x.warning?'COMPATIBILITY':'INFORMATION'}\n${x.text}`).join('\n\n');
- return h(U.Focusable,{ref:frameRef,'data-df-frame':true,'data-df-studio':true,'data-short':short,'data-narrow':narrow,'data-motion':motion,className:'df-studio',style:{height:frameHeight},onButtonDown:navEvent,onCancel:e=>{e?.stopPropagation?.();if(overlay)close();else exitStudio();},'flow-children':'column'},h('style',null,studioCSS),h('div',{className:'df-atmosphere'}),
-  h('header',{className:'df-top'},h('div',{className:'df-brand'},h('span',{className:'df-logo'},studioIcon('fusion',23)),'Deck Fusion'),h('span',{className:'df-beta'},'v0.3-beta10'),h('div',{className:'df-game'},h('span',{className:'df-eyebrow'},'Active game'),h('strong',{title:p?.name},p?.name||'Select a game'),h('span',{className:dirty?'df-dirty':'df-eyebrow'},dirty?'● Unapplied changes':'Saved configuration')),
+ return h(U.Focusable,{ref:frameRef,'data-df-frame':true,'data-df-studio':true,'data-short':short,'data-narrow':narrow,'data-motion':motion,className:'df-studio',style:{height:frameHeight},onButtonDown:navEvent,onCancel:e=>{if(studioKeyboardOwnsInput(frameRef.current))return;e?.stopPropagation?.();if(overlay)close();else exitStudio();},'flow-children':'column'},h('style',null,studioCSS),h('div',{className:'df-atmosphere'}),
+  h('header',{className:'df-top'},h('div',{className:'df-brand'},h('span',{className:'df-logo'},studioIcon('fusion',23)),'Deck Fusion'),h('span',{className:'df-beta'},'v0.3-beta12'),h('div',{className:'df-game'},h('span',{className:'df-eyebrow'},'Active game'),h('strong',{title:p?.name},p?.name||'Select a game'),h('span',{className:dirty?'df-dirty':'df-eyebrow'},dirty?'● Unapplied changes':'Saved configuration')),
    h(StudioButton,{className:'df-icon df-motion-control',onClick:()=>{const next=!motion;setMotion(next);try{sessionStorage.setItem('deck-fusion-motion',next?'on':'off');}catch{}},'aria-label':motion?'Pause interface animation':'Enable interface animation'},studioIcon('spark',16)),
    h(StudioButton,{className:'df-primary',disabled:busy||!p,onClick:onApply},studioIcon('check',16),narrow?'Apply':'Review & apply'),h(StudioButton,{className:'df-icon',onClick:()=>exitStudio(),'aria-label':'Back to Steam'},studioIcon('close',18))),
   h('div',{className:'df-body'},h('nav',{className:'df-nav','aria-label':'Configuration tabs'},h('div',{className:'df-eyebrow df-nav-label'},'Expert Mode'),...STUDIO_TABS.map(([id,label,icon])=>h(StudioButton,{key:id,className:'df-nav-button','data-active':tab===id,'aria-label':label,'aria-current':tab===id?'page':undefined,disabled:busy,onClick:()=>setTab(id)},studioIcon(icon,18),h('span',null,label))),null),
