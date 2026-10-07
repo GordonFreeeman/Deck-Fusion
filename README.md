@@ -6,7 +6,7 @@ I wanted to use frame generation, better upscaling and a few ReShade effects on 
 
 You choose a game, enable the features you want, adjust their settings and apply. Each game keeps its own configuration, so you can use a different combination for Cyberpunk, The Witcher 3 or Baldur's Gate 3 without starting from scratch every time.
 
-**Current version: v0.3-beta6.** Cyberpunk 2077, The Witcher 3 and Baldur's Gate 3 have been set up successfully during development. That isn't a compatibility guarantee for every game, and the project is still in beta.
+**Current version: v0.3-beta8.** Cyberpunk 2077, The Witcher 3 and Baldur's Gate 3 have been set up successfully during development. That isn't a compatibility guarantee for every game, and the project is still in beta.
 
 ## What it does
 
@@ -15,6 +15,7 @@ You choose a game, enable the features you want, adjust their settings and apply
 - **ReShade effects:** browse the available shaders and toggle individual effects in a searchable popup. When OptiScaler is enabled, ReShade loads through it automatically.
 - **DLL injection:** choose the filename used to load OptiScaler or standalone ReShade, with the corresponding Wine overrides handled for you.
 - **Windows runtimes:** install optional dependencies such as `d3dcompiler_47` and `vcrun2022` into the game's Proton prefix.
+- **Removal:** review an existing OptiScaler / ReShade installation, remove identified files with backups, and undo the removal if needed.
 - **Repair:** reinstall missing or changed files and replace conflicting launch options after showing you what will change.
 
 ## What you need
@@ -27,7 +28,7 @@ OptiScaler needs a compatible 64-bit Windows game with a supported upscaler inpu
 
 ## Installation
 
-1. Download `Deck-Fusion-v0.3-beta6.zip` from this repository's **Releases**. Use the plugin ZIP rather than GitHub's automatically generated source archive.
+1. Download `Deck-Fusion-v0.3-beta8.zip` from this repository's **Releases**. Use the plugin ZIP rather than GitHub's automatically generated source archive.
 2. Open Decky Loader's settings, enable developer mode if necessary, and install the plugin from the ZIP.
 3. Open Deck Fusion in the Decky sidebar, then select **Open Deck Fusion**.
 
@@ -42,6 +43,16 @@ Make sure you've selected the actual game executable rather than its launcher. Y
 **Respect Deck FPS limiter** is enabled by default; set your desired output limit in Steam's Performance menu. When using LSFG, turn off the game's own frame generation to avoid stacking them. If you're using OptiScaler, you also need to enable a compatible upscaler input in the game's graphics settings after applying the configuration.
 
 The optional [FSR 4.1.1b RDNA2 fix](https://github.com/the3rdparty1917/fsr4xyz/releases/tag/4.1.1b) is preselected on detected Steam Deck/RDNA2 hardware and can be unchecked. It is only installed when OptiScaler and FSR 4 INT8 are selected. This is a community build, and its results and performance will depend on the game.
+
+## Manual OptiScaler settings
+
+Open **Upscaling output > Advanced OptiScaler settings** to edit the full `OptiScaler.ini` for the selected game. You can start with the configuration Deck Fusion would apply, choose **Load installed settings** to import the file already in the game's executable folder, or choose **Use guided settings** to return to the normal presets.
+
+**Save to draft** checks the INI and remembers it for that game. **Cancel** discards the editor's changes. The game folder is updated when you press **Apply this game**, using the same backup and recovery process as the rest of setup. Restart the game afterwards. A keyboard works directly; on the Deck, use **Steam + X** to open the on-screen keyboard, and the right stick or touch to scroll the editor.
+
+While a manual INI is active, the guided output picker is disabled so it cannot overwrite your changes. `LoadReshade` still follows Deck Fusion's ReShade toggle. Keep the renderer settings and `[FrameGen]` section, and set `Enabled` to `true` or `false` explicitly. Enabling OptiScaler frame generation while LSFG is enabled is rejected.
+
+Games may need different settings, and the editor does not apply a universal Witcher 3 preset. Start from a configuration that works for your chosen DirectX renderer, change the relevant settings and apply it to that game.
 
 ## If OptiScaler or ReShade doesn't load
 
@@ -71,6 +82,16 @@ Profiles, backups and logs are stored under:
 ~/.local/share/deck-fusion/profiles/<appid>/
 ```
 
+## Removing an existing setup
+
+On **Choose a game**, select **Remove existing OptiScaler / ReShade**. Deck Fusion scans the game folder and shows which files it can remove, which originals it can restore, and which files it will keep. Nothing changes until you press **Back up and remove**, and the game must be closed.
+
+For files installed by Deck Fusion, removal checks the recorded hashes and restores the original backups where available. For an installation made by another tool, a DLL must match a cached injector or identify itself as OptiScaler or ReShade in its version resources. A filename such as `version.dll` is never enough. Unknown DLLs, edited configuration files, untracked presets and shader folders, and untracked shared SDK libraries stay where they are. An older or unusual build that cannot be identified is also kept.
+
+Every changed file gets a recovery copy under the game's profile directory. Open the same removal screen and choose **Undo last removal** to review restoring the files and settings. Undo stops if those files or the Steam launch options have changed since removal, so it cannot silently overwrite later edits. If an operation was interrupted, the removal screen offers **Recover operation** instead.
+
+Removal keeps your applied LSFG settings, frame cap and Windows runtimes; unapplied draft edits are discarded. Launch overrides are only stripped for identified injector filenames that have been removed. If a Proton prefix forces native-only loading for one of those missing DLLs, removal stops until that override is corrected. It does not edit the prefix behind your back.
+
 ## Controls
 
 | Input | Action |
@@ -78,10 +99,14 @@ Profiles, backups and logs are stored under:
 | D-pad / left stick | Navigate |
 | A / Enter / Space | Select |
 | B / Escape | Go back or close a popup |
-| Right trackpad / mouse / touchscreen | Point, click or tap |
-| R2 | Click with Steam's browser input bindings |
+| Right trackpad | Move the pointer |
+| Mouse / touchscreen | Click or tap |
+| L1 / R1 | Previous / next main setup step (1–6) |
+| L2 / R2 | Previous / next tab within the current step |
 | Right stick / mouse wheel / touch drag | Scroll the effects list |
 | Steam + X | Open the on-screen keyboard |
+
+R2 is reserved for tab navigation. Use A to activate the focused control, or click with a mouse or tap the screen. Navigation buttons do not confirm Apply or removal, and they stay locked while a popup is open. Steps with no applicable settings are skipped.
 
 Exiting Deck Fusion returns to Steam Home and the game reel.
 
@@ -105,7 +130,7 @@ python3 scripts/hash_manifest.py
 python3 scripts/package.py
 ```
 
-The package script writes the release ZIP and its SHA-256 file beside the source directory. It checks the archive's integrity and that the compiled frontend matches the source. Public versions use `v0.3-beta6`; the package metadata uses `0.3.0-beta6`.
+The package script writes the release ZIP and its SHA-256 file beside the source directory. It checks the archive's integrity and that the compiled frontend matches the source. Public versions use `v0.3-beta8`; the package metadata uses `0.3.0-beta8`.
 
 The backend and interface tests use simulated game files and Steam/Decky services. They cover configuration, installation transactions and UI behavior, but cannot establish game compatibility or GPU performance. Previous test results and their limits are documented in [the verification record](agent-review.md).
 

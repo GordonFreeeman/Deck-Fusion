@@ -9,6 +9,7 @@ import re
 import shlex
 import time
 from pathlib import Path
+from fusion_opti_editor import apply_manual, parse_manual, reset_manual
 from fusion_catalog import DEFAULT_PROFILE, SHADER_PACKS, FSR4FIX
 from fusion_downloads import Packages
 from fusion_network import tls_context
@@ -315,9 +316,10 @@ class Engine:
                 not isinstance(setup.get('runtime_prefix'), str) or len(setup['runtime_prefix']) > 4096):
             raise FusionError('Invalid setup preferences.')
         l, o, r = p['lsfg'], p['opti'], p['reshade']
+        if o['enabled']: apply_manual(o)
         for key in ('enabled', 'performance_mode', 'allow_fp16', 'override_present_mode', 'preserve_swapchain_image_count', 'respect_deck_limiter'): boolean(l[key])
         number(l['multiplier'], 1, 8, True); number(l['flow_scale'], .1, 1)
-        for key in ('enabled', 'fg', 'enable_nvapi', 'fsr4_watermark', 'fsr4_rdna2_fix'): boolean(o[key])
+        for key in ('enabled', 'fg', 'manual_reset', 'enable_nvapi', 'fsr4_watermark', 'fsr4_rdna2_fix'): boolean(o[key])
         if o['fsr_mode'] not in ('auto', 'fsr3', 'fsr4_int8'): raise FusionError('Unknown FSR backend mode.')
         if o['mouse_input'] not in ('auto', 'polling', 'window'): raise FusionError('Unknown OptiScaler mouse-input mode.')
         if o['steam_input'] not in ('auto', 'keep', 'disable'): raise FusionError('Unknown OptiScaler overlay compatibility mode.')
@@ -390,6 +392,95 @@ class Engine:
         text += 'pacing_mode = "vsync"\n'
         return text
 
+    def opti_ini(self, p, use_installed=True):
+        root=Path(p['root']);parent=Path(p['exe']).parent;o,r=p['opti'],p['reshade']
+        pkg=self.package('opti');base=Path(pkg['path'])/pkg['payload']['directory']
+        def rel(name):return (parent.relative_to(root)/name).as_posix()
+        template = (base / pkg['payload']['ini']).read_text('utf-8-sig')
+        schema = opti_schema(template); valid = {(s['section'], s['key']) for s in schema}
+        for required in [('Upscalers','Dx11Upscaler'),('Upscalers','Dx12Upscaler'),('Upscalers','VulkanUpscaler'),('FrameGen','Enabled')]:
+            if required not in valid:
+                raise FusionError('The installed OptiScaler configuration format changed. Review its upstream options before integrating this version.')
+        if o.get('manual_ini'):
+            parse_manual(o['manual_ini'])
+            matches=[v for v in schema if v['key'].casefold()=='loadreshade']
+            if r['mode']=='opti' and not matches:raise FusionError('This OptiScaler version cannot chain ReShade.')
+            return ini_patch(o['manual_ini'],{v['section']:{v['key']:str(r['mode']=='opti').lower()} for v in matches})
+        changes = {}
+        for section, values in o['overrides'].items():
+            if not isinstance(values, dict): raise FusionError('Invalid advanced OptiScaler settings.')
+            for key, value in values.items():
+                if (section,key) not in valid: raise FusionError(f'Unknown key in the installed OptiScaler version: {section}.{key}')
+                if not isinstance(value, (str,int,float,bool)) or any(c in str(value) for c in '\n\r\0'):
+                    raise FusionError('Invalid OptiScaler INI value.')
+                changes.setdefault(section,{})[key] = str(value)
+        changes.setdefault('Upscalers',{}).update({'Dx11Upscaler':o['dx11'],'Dx12Upscaler':o['dx12'],'VulkanUpscaler':o['vulkan']})
+        changes.setdefault('FrameGen',{})['Enabled'] = str(o['fg']).lower()
+        if o['fg']: changes['FrameGen'].update({'FGInput':'upscaler','FGOutput':'fsrfg'})
+        def known_key(key, value, required=False):
+            matches = [s for s in schema if s['key'].casefold() == key.casefold()]
+            if not matches and required: raise FusionError(f'This OptiScaler version does not expose {key}; refusing an unverified configuration.')
+            for s in matches: changes.setdefault(s['section'],{})[s['key']] = value
+        if o['fsr_mode'] != 'auto':
+            experimental = o['fsr_mode'] == 'fsr4_int8'
+            keys = {item['key'] for item in schema}
+            if experimental:
+                if not ({'Fsr4ForceModel', 'Fsr4ForceEnableInt8'} & keys):
+                    raise FusionError('This OptiScaler version cannot force the FSR4 INT8 model. Update stable OptiScaler in Tools first.')
+                if not any(f.is_file() for f in base.rglob('amd_fidelityfx_upscaler_dx12.dll')):
+                    raise FusionError('The installed OptiScaler package has no FFX upscaler DLL. Repair/update OptiScaler before selecting experimental FSR4.')
+            # Do not force Fsr4Update=true on unsupported GPUs: upstream documents
+            # that this can trigger the SDK's FSR3 fallback. Prefer its INT8 selector.
+            known_key('Fsr4Update', 'auto' if experimental else 'false', experimental)
+            if 'Fsr4ForceModel' in keys:
+                known_key('Fsr4ForceModel', '2' if experimental else 'auto', experimental)
+            else:
+                known_key('Fsr4ForceEnableInt8', str(experimental).lower(), experimental)
+            known_key('UpscalerIndex', '0' if experimental else '1', experimental)
+            if o['fg']: known_key('FGIndex', '1')  # This UI offers FSR3 FG, not unsupported ML-FG.
+        for key, value in opti_compat_keys(o).items():
+            known_key(key, value, key != 'Fsr4EnableWatermark' or o['fsr_mode']=='fsr4_int8')
+        known_key('LoadReshade', str(r['mode']=='opti').lower(), r['mode']=='opti')
+        if o['spoof'] != 'auto':
+            matches = [s for s in schema if s['key'] == 'Dxgi' and 'spoof' in s['section'].lower()]
+            if not matches: raise FusionError('Could not find the GPU spoofing key in this OptiScaler version.')
+            for s in matches: changes.setdefault(s['section'],{})[s['key']] = o['spoof']
+        # Retain existing OptiScaler choices if managed by us; explicit UI values win.
+        current = parent / 'OptiScaler.ini'
+        tx = Transaction(root, self.store(p['appid']))
+        if use_installed and not o['manual_reset'] and rel('OptiScaler.ini') in tx.manifest()['files'] and current.is_file():
+            template = current.read_text('utf-8-sig', errors='replace')
+        return ini_patch(template, changes)
+
+    def opti_editor(self, raw):
+        p=migrate_profile(raw);game=self.game(p['appid']);root=Path(game['root']).resolve()
+        exe=Path(p['exe']);exe=exe if exe.is_absolute() else root/exe
+        try:exe=safe_target(root,str(exe.relative_to(root)))
+        except ValueError:raise FusionError('Choose an executable inside the selected game.')
+        if not exe.is_file():raise FusionError('Choose the game executable first.')
+        p.update(root=str(root),exe=str(exe))
+        current=safe_target(root,(exe.parent.relative_to(root)/'OptiScaler.ini').as_posix())
+        installed=None
+        if current.is_file():
+            if current.stat().st_size>1024*1024:raise FusionError('Installed OptiScaler INI exceeds 1 MB; it was not read.')
+            installed=current.read_text('utf-8-sig')
+        defaults=copy.deepcopy(p);reset_manual(defaults['opti'])
+        return {'text':self.opti_ini(p),'defaults':self.opti_ini(defaults,False),'installed':installed,
+                'manual':bool(p['opti']['manual_ini']),'version':self.package('opti')['version']}
+
+    def opti_manual(self, raw, text):
+        if not isinstance(text,str):raise FusionError('Manual OptiScaler INI must be text.')
+        p=migrate_profile(raw);p['opti']['manual_ini']=text
+        if text:
+            p['opti']['manual_reset']=False
+            apply_manual(p['opti'])
+            if p['lsfg']['enabled'] and p['opti']['fg']:raise FusionError('Disable LSFG before enabling OptiScaler frame generation.')
+            # Run all runtime-sensitive checks now; Save never writes game files.
+            probe=copy.deepcopy(p);probe['lsfg']['enabled']=False;probe['lsfg']['override_present_mode']=True;probe['reshade']['mode']='off';probe['opti']['fsr4_rdna2_fix']=False
+            self.validate(probe)
+        else:reset_manual(p['opti'])
+        return p
+
     def build(self, p):
         root = Path(p['root']); parent = Path(p['exe']).parent
         prefix = parent.relative_to(root).as_posix()
@@ -398,55 +489,7 @@ class Engine:
         o, r = p['opti'], p['reshade']
         if o['enabled']:
             pkg = self.package('opti'); base = Path(pkg['path']) / pkg['payload']['directory']
-            template = (base / pkg['payload']['ini']).read_text('utf-8-sig')
-            schema = opti_schema(template); valid = {(s['section'], s['key']) for s in schema}
-            for required in [('Upscalers','Dx11Upscaler'),('Upscalers','Dx12Upscaler'),('Upscalers','VulkanUpscaler'),('FrameGen','Enabled')]:
-                if required not in valid:
-                    raise FusionError('The installed OptiScaler configuration format changed. Review its upstream options before integrating this version.')
-            changes = {}
-            for section, values in o['overrides'].items():
-                if not isinstance(values, dict): raise FusionError('Invalid advanced OptiScaler settings.')
-                for key, value in values.items():
-                    if (section,key) not in valid: raise FusionError(f'Unknown key in the installed OptiScaler version: {section}.{key}')
-                    if not isinstance(value, (str,int,float,bool)) or any(c in str(value) for c in '\n\r\0'):
-                        raise FusionError('Invalid OptiScaler INI value.')
-                    changes.setdefault(section,{})[key] = str(value)
-            changes.setdefault('Upscalers',{}).update({'Dx11Upscaler':o['dx11'],'Dx12Upscaler':o['dx12'],'VulkanUpscaler':o['vulkan']})
-            changes.setdefault('FrameGen',{})['Enabled'] = str(o['fg']).lower()
-            if o['fg']: changes['FrameGen'].update({'FGInput':'upscaler','FGOutput':'fsrfg'})
-            def known_key(key, value, required=False):
-                matches = [s for s in schema if s['key'].casefold() == key.casefold()]
-                if not matches and required: raise FusionError(f'This OptiScaler version does not expose {key}; refusing an unverified configuration.')
-                for s in matches: changes.setdefault(s['section'],{})[s['key']] = value
-            if o['fsr_mode'] != 'auto':
-                experimental = o['fsr_mode'] == 'fsr4_int8'
-                keys = {item['key'] for item in schema}
-                if experimental:
-                    if not ({'Fsr4ForceModel', 'Fsr4ForceEnableInt8'} & keys):
-                        raise FusionError('This OptiScaler version cannot force the FSR4 INT8 model. Update stable OptiScaler in Tools first.')
-                    if not any(f.is_file() for f in base.rglob('amd_fidelityfx_upscaler_dx12.dll')):
-                        raise FusionError('The installed OptiScaler package has no FFX upscaler DLL. Repair/update OptiScaler before selecting experimental FSR4.')
-                # Do not force Fsr4Update=true on unsupported GPUs: upstream documents
-                # that this can trigger the SDK's FSR3 fallback. Prefer its INT8 selector.
-                known_key('Fsr4Update', 'auto' if experimental else 'false', experimental)
-                if 'Fsr4ForceModel' in keys:
-                    known_key('Fsr4ForceModel', '2' if experimental else 'auto', experimental)
-                else:
-                    known_key('Fsr4ForceEnableInt8', str(experimental).lower(), experimental)
-                known_key('UpscalerIndex', '0' if experimental else '1', experimental)
-                if o['fg']: known_key('FGIndex', '1')  # This UI offers FSR3 FG, not unsupported ML-FG.
-            for key, value in opti_compat_keys(o).items():
-                known_key(key, value, key != 'Fsr4EnableWatermark' or o['fsr_mode']=='fsr4_int8')
-            known_key('LoadReshade', str(r['mode']=='opti').lower(), r['mode']=='opti')
-            if o['spoof'] != 'auto':
-                matches = [s for s in schema if s['key'] == 'Dxgi' and 'spoof' in s['section'].lower()]
-                if not matches: raise FusionError('Could not find the GPU spoofing key in this OptiScaler version.')
-                for s in matches: changes.setdefault(s['section'],{})[s['key']] = o['spoof']
-            # Retain existing OptiScaler choices if managed by us; explicit UI values win.
-            current = parent / 'OptiScaler.ini'
-            tx = Transaction(root, self.store(p['appid']))
-            if rel('OptiScaler.ini') in tx.manifest()['files'] and current.is_file():
-                template = current.read_text('utf-8-sig', errors='replace')
+            template = self.opti_ini(p)
             for file in base.rglob('*'):
                 if not file.is_file() or file.is_symlink(): continue
                 relative = file.relative_to(base).as_posix()
@@ -461,7 +504,7 @@ class Engine:
                 if len(targets) != 1:
                     raise FusionError('Cannot identify a unique OptiScaler FidelityFX DLL target for the RDNA2 fix.')
                 desired[targets[0]] = self.fsr4fix_binary()
-            desired[rel('OptiScaler.ini')] = ini_patch(template, changes).encode('utf-8')
+            desired[rel('OptiScaler.ini')] = template.encode('utf-8')
             overrides[o['proxy']] = 'n,b'
             if o['enable_nvapi'] and rel('nvapi64.dll') in desired: overrides['nvapi64'] = 'n,b'
         if r['mode'] != 'off':
@@ -509,6 +552,7 @@ class Engine:
         if bg3_renderer(p['exe'], p['root'], p['appid']) and (o['enabled'] or r['mode'] != 'off'):
             runtime['bg3_target'] = {'root': p['root'], 'exe': p['exe']}
         saved_profile = copy.deepcopy(p); saved_profile['backup_conflicts'] = False
+        if o['enabled']:saved_profile['opti']['manual_reset']=False
         extras = {'profile.json':encoded(saved_profile), 'runtime.json':encoded(runtime)}
         if p['lsfg']['enabled']: extras['lsfg.toml'] = self.config_lsfg(p).encode('utf-8')
         return desired, extras, runtime
@@ -550,6 +594,7 @@ class Engine:
     def requirements(self, raw):
         """Read-only dependency list for the wizard. Never downloads implicitly."""
         p = migrate_profile(raw)
+        if p['opti']['enabled']:apply_manual(p['opti'])
         status = self.packages.status()
         required = []
         for component, enabled in [('lsfg', p['lsfg']['enabled']), ('opti', p['opti']['enabled']),
@@ -594,6 +639,7 @@ class Engine:
             if not candidate.is_absolute(): candidate = Path(game['root']) / candidate
             if not candidate.is_file() or not candidate.resolve().is_relative_to(Path(game['root']).resolve()):
                 raise FusionError('Choose the actual executable in Library or in step 1 of the wizard.')
+            if p['opti']['enabled'] and not remove:apply_manual(p['opti'])
             effective = self.detect_api(p, launch)['api'] if p['api'] == 'auto' else p['api']
             if not remove:
                 p, fixes, warnings = resolve_settings(p, effective, self.hardware())
@@ -603,7 +649,7 @@ class Engine:
                 warnings.extend(context['warnings'])
                 result.update(profile=p, resolutions=fixes, warnings=warnings, dll_context=context)
             # Main controls are authoritative. Make overwritten advanced values visible.
-            if not remove and p['opti']['enabled']:
+            if not remove and p['opti']['enabled'] and not p['opti']['manual_ini']:
                 shape = self.schema(p['appid'])['opti']
                 expected = {('Upscalers','Dx11Upscaler'):p['opti']['dx11'],
                             ('Upscalers','Dx12Upscaler'):p['opti']['dx12'],
@@ -631,9 +677,10 @@ class Engine:
                             'detail':'Use the main control instead of this conflicting advanced value.', 'before':values[key], 'after':value})
                         del values[key]
             if not remove and p['opti']['enabled']:
+                if p['opti']['manual_ini']:warnings.append('Manual OptiScaler INI is active. Guided presets do not replace its values; LoadReshade follows the ReShade toggle.')
                 if p['opti']['fsr_mode'] == 'fsr4_int8' and p['opti']['fsr4_rdna2_fix']:
                     warnings.append('Selected community FSR 4.1.1b INT8 RDNA2 ghosting fix from the3rdparty1917/fsr4xyz. Replace the OptiScaler FidelityFX upscaler DLL using tracked backups. This is a community Windows build used through Proton; Steam Deck rendering is not verified.')
-                if not p['opti']['fsr4_watermark']:
+                if not p['opti']['fsr4_watermark'] and not p['opti']['manual_ini']:
                     warnings.append('Watermark off: remove MLSR-WATERMARK entirely and use upstream auto in OptiScaler.ini. A zero-valued variable can still enable FidelityFX banners. Apply and fully restart; this does not disable INT8.')
                 if p['opti']['mouse_input'] == 'polling':
                     warnings.append('OptiScaler manual mouse polling is enabled. Pause the game first: polling cannot block clicks from also reaching the game. Close CET and ReShade menus while using OptiScaler.')
@@ -753,6 +800,8 @@ class Engine:
         opt = parent/'OptiScaler.ini'
         if opt.is_file():
             ini = ini_read(opt.read_text('utf-8-sig',errors='replace'))
+            if p['opti']['manual_ini']:
+                p['opti']['manual_ini']=opt.read_text('utf-8-sig');apply_manual(p['opti'])
             p['opti']['overrides'] = {s:dict(ini[s]) for s in ini.sections() if s != '__ROOT__'}
             for src,dst in [('Dx11Upscaler','dx11'),('Dx12Upscaler','dx12'),('VulkanUpscaler','vulkan')]:
                 p['opti'][dst] = ini.get('Upscalers',src,fallback=p['opti'][dst])
@@ -811,7 +860,7 @@ class Engine:
 
     def diagnostics(self, appid=''):
         status = self.packages.status()
-        result = {'version':'0.3-beta6','data':str(self.data),'home':str(self.home),
+        result = {'version':'0.3-beta8','data':str(self.data),'home':str(self.home),
                   'packages':status,'legacy_layers':self.old_layers(),
                   'settings':self.settings(), 'bundled':self.packages.bundle_status(),
                   'https':tls_context()[1], 'last_error':read_json(self.data/'last-error.json',None),

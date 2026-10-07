@@ -16,7 +16,7 @@ const source=fs.readFileSync(new URL('../dist/index.js',import.meta.url),'utf8')
 let JSDOM,React,ReactDOM;
 if(modules){const req=createRequire(path.resolve(modules,'package.json'));({JSDOM}=req('jsdom'));const bootstrap=new JSDOM('<!doctype html><body></body>');global.window=bootstrap.window;global.document=bootstrap.window.document;Object.defineProperty(global,'navigator',{value:bootstrap.window.navigator,configurable:true});React=req('react');ReactDOM=req('react-dom/client');}
 const settle=async(ms=15)=>{await new Promise(r=>setTimeout(r,ms));};
-async function host({width=1280,height=800,raw=true,native=false,rdna2Fix=false,guided=false,prepare=null,nativeScroll=false,initialLaunch='--skip-launcher',launchFromSidebar=false}={}){
+async function host({width=1280,height=800,raw=true,native=false,modern=false,rdna2Fix=false,guided=false,prepare=null,nativeScroll=false,initialLaunch='--skip-launcher',launchFromSidebar=false}={}){
  const dom=new JSDOM('<!doctype html><div id="root"></div><div id="modal"></div>',{url:'https://deck-fusion.test',pretendToBeVisual:true,runScripts:'outside-only'}),w=dom.window;
  global.window=w;global.document=w.document;Object.defineProperty(global,'navigator',{value:w.navigator,configurable:true});
  Object.defineProperty(w,'innerWidth',{value:width,writable:true});Object.defineProperty(w,'innerHeight',{value:height,writable:true});w.document.hasFocus=()=>true;
@@ -24,7 +24,7 @@ async function host({width=1280,height=800,raw=true,native=false,rdna2Fix=false,
  Object.defineProperties(w.HTMLElement.prototype,{clientWidth:{configurable:true,get(){return this.classList.contains('df-reader')?Math.min(600,w.innerWidth-90):w.innerWidth;}},clientHeight:{configurable:true,get(){if(this.classList.contains('df-options'))return Math.max(44,w.innerHeight-290);return this.classList.contains('df-reader')?Math.max(70,w.innerHeight-370):w.innerHeight-112;}},offsetWidth:{configurable:true,get(){return this.clientWidth;}},offsetHeight:{configurable:true,get(){return this.clientHeight;}},scrollHeight:{configurable:true,get(){if(this.classList.contains('df-reader'))return Math.max(this.clientHeight,(this.textContent||'').split('\n').reduce((n,line)=>n+Math.max(1,Math.ceil(line.length/(this.clientWidth/8))),0)*22+26);return this.clientHeight;}}});
  w.HTMLElement.prototype.getBoundingClientRect=function(){return {x:0,y:40,left:0,top:40,right:this.clientWidth,bottom:40+this.clientHeight,width:this.clientWidth,height:this.clientHeight};};
  let hit=null;w.document.elementFromPoint=()=>hit||w.document.querySelector('[data-df-studio]');
- const h=React.createElement,routes=new Map(),calls=[],listeners=[],rawState={callback:null,unregistered:false,nativeCalls:[]},routeLog=[];
+ const h=React.createElement,routes=new Map(),calls=[],listeners=[],rawState={callback:null,unregistered:false,nativeCalls:[],inputCallback:null,inputUnregistered:false},routeLog=[];
  const root=ReactDOM.createRoot(w.document.querySelector('#root')),modal=ReactDOM.createRoot(w.document.querySelector('#modal'));
  const history={entries:['/library/home'],index:0,mainMenuOpens:0};
  const renderRoute=to=>{routeLog.push(to);const Route=routes.get(to);root.render(Route?h(Route):h('div',null,'Steam Home'));};
@@ -49,7 +49,7 @@ async function host({width=1280,height=800,raw=true,native=false,rdna2Fix=false,
  if(prepare)prepare({fixtures,profile,fields,jobResults});
  const api={routerHook:{addRoute:(r,f)=>routes.set(r,f),removeRoute:r=>routes.delete(r)},call:async(method,...args)=>{calls.push({method,args});if(method==='rpc')return {ok:true,result:structuredClone(typeof fixtures[args[0]]==='function'?fixtures[args[0]](args[1]):fixtures[args[0]]||{})};if(method==='active_jobs')return {ok:true,result:[]};if(method==='start_job'){activeJob={action:args[0],payload:args[1]};return {ok:true,result:{id:'test-job'}};}if(method==='get_job'){const handler=jobResults[activeJob.action];const result=typeof handler==='function'?await handler(activeJob.payload):handler||{profile:activeJob.payload.profile||profile,approval_token:'test-approval',blockers:[],changes:[],warnings:[],launch_after:'%command% --skip-launcher',resolutions:[]};return {ok:true,result:{state:'done',result}};}throw Error(method);}};
  let liveLaunch=initialLaunch;
- Object.assign(w,{SP_REACT:React,DFL:fields,SteamClient:{Apps:{RegisterForAppDetails:(id,cb)=>{listeners.push(cb);cb({strLaunchOptions:liveLaunch});return {unregister(){}};},SetAppLaunchOptions:(id,value)=>{liveLaunch=value;listeners.forEach(cb=>cb({strLaunchOptions:value}));}},Input:{...(raw?{RegisterForControllerStateChanges:cb=>{rawState.callback=cb;return {unregister:()=>{rawState.callback=null;rawState.unregistered=true;}}}}:{}),...(native?{SetWebBrowserActionset:enabled=>rawState.nativeCalls.push(enabled)}:{})}},__DECKY_SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED_deckyLoaderAPIInit:{connect:()=>api}});
+ Object.assign(w,{SP_REACT:React,DFL:fields,SteamClient:{Apps:{RegisterForAppDetails:(id,cb)=>{listeners.push(cb);cb({strLaunchOptions:liveLaunch});return {unregister(){}};},SetAppLaunchOptions:(id,value)=>{liveLaunch=value;listeners.forEach(cb=>cb({strLaunchOptions:value}));}},Input:{...(modern?{RegisterForControllerInputMessages:cb=>{rawState.inputCallback=cb;return {unregister:()=>{rawState.inputCallback=null;rawState.inputUnregistered=true;}}}}:{}),...(raw?{RegisterForControllerStateChanges:cb=>{rawState.callback=cb;return {unregister:()=>{rawState.callback=null;rawState.unregistered=true;}}}}:{}),...(native?{SetWebBrowserActionset:enabled=>rawState.nativeCalls.push(enabled)}:{})}},__DECKY_SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED_deckyLoaderAPIInit:{connect:()=>api}});
  w.eval(source+'\nwindow.__studio={studioInventory,useMeasuredPages,StudioReviewContent,StudioOverlay,StudioButton,StudioField,SetupStudio,EffectPicker,setupEffects,setupSteps,startupGame,sameGuidedGraphicsPlan};');
  const plugin=w.__makePlugin();
  const openSidebar=async()=>{root.render(plugin.content);await settle();[...w.document.querySelectorAll('button')].find(e=>e.textContent==='Open Deck Fusion').click();await settle(280);};
@@ -578,5 +578,112 @@ test('repairing a stale VC receipt completes the approved launch replacement in 
   assert.equal(writes[1].args[1].launch_actual,old);assert.equal(writes[1].args[1].launch,'%command% --skip-launcher');
   assert.equal(writes[1].args[1].approval,'after-runtime');assert.equal(t.getLaunch(),replacement);
   assert.equal(t.w.document.querySelector('[data-setup-done]').dataset.setupDone,'true');
+ }finally{await t.close();}
+});
+
+async function shoulder(t,code){for(let n=0;n<40&&t.w.document.querySelector('.df-setup-controls .df-primary')?.textContent==='Working…';n++)await settle(15);const frame=t.w.document.querySelector('[data-df-studio]');frame.__button({detail:{button:code},stopPropagation(){},preventDefault(){}});await settle(180);}
+test('six phases use bumpers; triggers stay within a phase and never Apply',{skip},async()=>{
+ const t=await host({guided:true,modern:true,native:true,raw:false});try{
+  assert.equal(t.w.document.querySelectorAll('.df-phase').length,6);
+  await shoulder(t,8);assert.equal(setupStep(t),'target',t.w.document.querySelector('.df-setup-alert')?.textContent||t.w.document.activeElement?.outerHTML);
+  await shoulder(t,8);assert.equal(setupStep(t),'target','R2 cannot advance past the last tab');
+  await shoulder(t,7);assert.equal(setupStep(t),'game');
+  await shoulder(t,6);assert.equal(setupStep(t),'features');
+  await t.click('OptiScaler');await shoulder(t,6);assert.equal(setupStep(t),'injection');
+  await shoulder(t,6);assert.equal(setupStep(t),'runtimes');
+  await shoulder(t,6);assert.equal(setupStep(t),'frame');
+  await shoulder(t,8);assert.equal(setupStep(t),'upscale');
+  await shoulder(t,6);assert.equal(setupStep(t),'review');
+  await shoulder(t,6);await shoulder(t,8);assert.equal(jobs(t).includes('prepare'),false);
+  await shoulder(t,5);assert.equal(setupStep(t),'frame');
+ }finally{await t.close();assert.equal(t.rawState.inputUnregistered,true);}
+});
+test('phase jumps enforce API and prefix checks and a popup holds navigation',{skip},async()=>{
+ const t=await host({guided:true,modern:true,prepare:({fixtures,profile,jobResults})=>{profile.api='auto';fixtures.detect_api={api:'auto',note:'Choose a renderer'};profile.setup={version:1,runtimes:['vcrun2022'],runtime_prefix:''};jobResults.runtime_status={prefix:null,prefixes:[],helper:{available:true},runtimes:[],blockers:[]};}});try{
+  await shoulder(t,6);assert.equal(setupStep(t),'target');assert.equal(jobs(t).includes('install'),false);
+  await t.click('Graphics API: Auto-detect');await shoulder(t,6);assert.equal(setupStep(t),'target');
+  await t.click('DirectX 12');await shoulder(t,6);assert.equal(setupStep(t),'features');
+  await shoulder(t,6);assert.equal(setupStep(t),'runtimes');
+  await shoulder(t,6);assert.equal(setupStep(t),'runtimes');assert.equal(jobs(t).includes('runtime_install'),false);
+ }finally{await t.close();}
+});
+test('native trigger edges suppress browser clicks, deduplicate Steam events and release mouse control',{skip},async()=>{
+ const t=await host({guided:true,modern:true,native:true,raw:false});try{
+  const send=t.rawState.inputCallback;
+  send(0,29,true);await settle();assert.equal(setupStep(t),'target');
+  send(0,29,true);await shoulder(t,8);assert.equal(setupStep(t),'target');
+  const before=t.calls.length;const click=new t.w.MouseEvent('click',{bubbles:true,cancelable:true,detail:1});t.el('Next').dispatchEvent(click);await settle();
+  assert.equal(click.defaultPrevented,true);assert.equal(setupStep(t),'target');
+  send(0,29,false);await settle(250);await t.click('Next');assert.equal(setupStep(t),'features');
+  const foreign=t.w.document.createElement('button');t.w.document.body.appendChild(foreign);foreign.focus();send(0,31,true);send(0,31,false);await settle();assert.equal(setupStep(t),'features');
+ }finally{await t.close();}
+});
+function removalFixtures({fixtures,profile,jobResults}){
+ let removed=false;
+ const before='WINEDLLOVERRIDES="winmm=n,b" %command%',after='%command%';
+ jobResults.removal_plan=payload=>({appid:profile.appid,exe:profile.exe,can_apply:true,file_count:1,approval_token:payload.undo?'undo-token':'remove-token',undo:!!payload.undo,undo_available:removed,blockers:[],files:[{path:'winmm.dll',action:'back-up-and-remove',identity:'OptiScaler',reason:'Verified identity'},{path:'version.dll',action:'keep',identity:'Unidentified',reason:'Unknown ownership'}],warnings:['Every changed file is backed up.'],launch_before:payload.undo?after:before,launch_after:payload.undo?before:after});
+ jobResults.removal_prepare=payload=>{removed=!payload.undo;return {token:'removal-journal',launch_after:payload.undo?before:after};};
+ fixtures.finish={committed:true};
+}
+test('removal preview is inert, preserves unknowns in the list, and supports confirmed Undo',{skip},async()=>{
+ const t=await host({guided:true,initialLaunch:'WINEDLLOVERRIDES="winmm=n,b" %command%',prepare:removalFixtures});try{
+  await t.click('Remove existing OptiScaler / ReShade');assert.match(t.w.document.querySelector('.df-reader').textContent,/Keep: version.dll/);
+  await t.click('Cancel');assert.equal(jobs(t).includes('removal_prepare'),false);
+  await t.click('Remove existing OptiScaler / ReShade');await t.click('Back up and remove');await settle(80);
+  assert.equal(t.getLaunch(),'%command%');assert.equal(setupStep(t),'game');
+  const payload=t.calls.find(x=>x.method==='start_job'&&x.args[0]==='removal_prepare').args[1];assert.equal(payload.approval,'remove-token');
+  await t.click('Remove existing OptiScaler / ReShade');await t.click('Undo last removal');await t.click('Undo removal');await settle(80);
+  assert.equal(t.getLaunch(),'WINEDLLOVERRIDES="winmm=n,b" %command%');assert.equal(jobs(t).includes('runtime_install'),false);
+ }finally{await t.close();}
+});
+test('trigger in removal dialog cannot confirm and interrupted operations expose recovery',{skip},async()=>{
+ const t=await host({guided:true,modern:true,native:true,raw:false,initialLaunch:'WINEDLLOVERRIDES="winmm=n,b" %command%',prepare:removalFixtures});try{
+  await t.click('Remove existing OptiScaler / ReShade');t.rawState.inputCallback(0,29,true);
+  t.el('Back up and remove').dispatchEvent(new t.w.MouseEvent('click',{bubbles:true,cancelable:true,detail:1}));await settle();assert.equal(jobs(t).includes('removal_prepare'),false);
+  t.rawState.inputCallback(0,29,false);await settle(250);await t.click('Cancel');
+  t.fixtures.diagnostics={pending:{token:'interrupted',launch_before:t.getLaunch(),launch_after:'unused'}};
+  await t.click('Remove existing OptiScaler / ReShade');assert.ok(t.el('Recover operation'));assert.equal(t.el('Back up and remove'),undefined);
+  await t.click('Recover operation');assert.ok(t.calls.some(x=>x.method==='rpc'&&x.args[0]==='rollback'));
+ }finally{await t.close();}
+});
+
+const manualFixture='[Upscalers]\nDx11Upscaler=fsr31\nDx12Upscaler=fsr31\nVulkanUpscaler=fsr31\n[FrameGen]\nEnabled=false\n[Hotfix]\nSkipDxgiLoad=false\n';
+function optiEditorFixtures({fixtures,profile,jobResults}){
+ profile.opti.enabled=true;
+ fixtures.opti_editor=({profile:p})=>({text:p.opti.manual_ini||manualFixture,defaults:manualFixture,installed:manualFixture.replace('SkipDxgiLoad=false','SkipDxgiLoad=true'),manual:!!p.opti.manual_ini,version:'test-0.9.4'});
+ fixtures.opti_manual=({profile:p,text})=>{if(text.includes('BROKEN'))throw Error('Invalid OptiScaler INI');return {...p,opti:{...p.opti,manual_ini:text}};};
+ jobResults.plan=({profile:p})=>({profile:p,approval_token:'manual-approval',blockers:[],warnings:[],changes:[],resolutions:[],launch_after:'%command%'});
+ jobResults.prepare=({profile:p})=>{Object.assign(profile,p);return {token:'opti-journal',launch_after:'%command%'};};fixtures.finish={committed:true};
+}
+async function reachUpscale(t){for(let n=0;n<12&&setupStep(t)!=='upscale';n++){await t.click('Next');await settle(35);}assert.equal(setupStep(t),'upscale');}
+async function typeIni(t,value){const input=t.w.document.querySelector('textarea[aria-label="OptiScaler.ini"]');const set=Object.getOwnPropertyDescriptor(t.w.HTMLTextAreaElement.prototype,'value').set;set.call(input,value);input.dispatchEvent(new t.w.Event('input',{bubbles:true}));await settle();}
+test('advanced OptiScaler editor saves to a per-game draft and Apply uses that draft',{skip},async()=>{
+ const t=await host({guided:true,prepare:optiEditorFixtures});try{
+  await reachUpscale(t);await t.click('Advanced OptiScaler settings');const text=manualFixture.replace('SkipDxgiLoad=false','SkipDxgiLoad=true');
+  await typeIni(t,text);await t.click('Save to draft');await settle(60);
+  assert.equal(draft(t).opti.manual_ini,text);assert.equal(jobs(t).includes('prepare'),false);
+  assert.equal(t.w.document.querySelector('[data-df-card="Upscaling output"] .df-card-action').getAttribute('aria-disabled'),'true');
+  await go(t,'review');assert.match(t.w.document.querySelector('.df-setup-summary').textContent,/Manual INI/);
+  await t.click('Apply this game');await settle(70);
+  assert.equal(t.calls.find(x=>x.method==='start_job'&&x.args[0]==='prepare').args[1].profile.opti.manual_ini,text);
+ }finally{await t.close();}
+});
+test('manual OptiScaler Cancel is inert and Load installed / Use guided stay in the editor until saved',{skip},async()=>{
+ const t=await host({guided:true,prepare:optiEditorFixtures});try{
+  await reachUpscale(t);await t.click('Advanced OptiScaler settings');await typeIni(t,'BROKEN');await t.click('Cancel');
+  assert.equal(draft(t).opti.manual_ini||'','');assert.equal(t.calls.filter(x=>x.method==='rpc'&&x.args[0]==='opti_manual').length,0);
+  await t.click('Advanced OptiScaler settings');await t.click('Load installed settings');assert.match(t.w.document.querySelector('textarea').value,/SkipDxgiLoad=true/);
+  await t.click('Save to draft');await settle(40);assert.match(draft(t).opti.manual_ini,/SkipDxgiLoad=true/);
+  await t.click('Advanced OptiScaler settings');await t.click('Use guided settings');await t.click('Save to draft');await settle(40);
+  assert.equal(draft(t).opti.manual_ini,'');assert.notEqual(t.w.document.querySelector('[data-df-card="Upscaling output"] .df-card-action').getAttribute('aria-disabled'),'true');
+ }finally{await t.close();}
+});
+test('invalid manual OptiScaler settings stay open and trigger navigation cannot close or save the editor',{skip},async()=>{
+ const t=await host({guided:true,modern:true,native:true,raw:false,prepare:optiEditorFixtures});try{
+  await reachUpscale(t);await t.click('Advanced OptiScaler settings');await typeIni(t,'BROKEN');
+  await shoulder(t,6);assert.equal(setupStep(t),'upscale');assert.ok(t.w.document.querySelector('textarea'));
+  await t.click('Save to draft');await settle(40);assert.match(t.w.document.querySelector('[role=alert]').textContent,/Invalid/);assert.ok(t.w.document.querySelector('textarea'));
+  assert.equal(draft(t).opti.manual_ini||'','');assert.equal(jobs(t).includes('prepare'),false);
+  await t.key('Escape',t.w.document.querySelector('textarea'));assert.equal(t.w.document.querySelector('textarea'),null);
  }finally{await t.close();}
 });

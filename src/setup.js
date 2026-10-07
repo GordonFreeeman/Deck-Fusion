@@ -1,15 +1,15 @@
 /* Guided setup. Business operations remain in Manager and the existing backend. */
-const SETUP_PHASES=['Game','Features','Runtimes','Performance','Review'];
+const SETUP_PHASES=['Game','Features','DLL injection','Runtimes','Performance','Review'];
 function setupSteps(p){return [
  {id:'game',title:'Choose a game',phase:0},
  {id:'target',title:'Executable & graphics API',phase:0},
  {id:'features',title:'Choose features',phase:1},
- ...(p&&(p.opti.enabled||p.reshade.mode!=='off')?[{id:'injection',title:'DLL injection',phase:1}]:[]),
- ...(p&&p.reshade.mode!=='off'?[{id:'effects',title:'ReShade effects',phase:1}]:[]),
- {id:'runtimes',title:'Windows runtimes',phase:2},
- {id:'frame',title:'Frame pacing',phase:3},
- ...(p?.opti.enabled?[{id:'upscale',title:'Upscaling output',phase:3}]:[]),
- {id:'review',title:'Review & apply',phase:4}
+ ...(p&&(p.opti.enabled||p.reshade.mode!=='off')?[{id:'injection',title:'DLL injection',phase:2}]:[]),
+ ...(p&&p.reshade.mode!=='off'?[{id:'effects',title:'ReShade effects',phase:2}]:[]),
+ {id:'runtimes',title:'Windows runtimes',phase:3},
+ {id:'frame',title:'Frame pacing',phase:4},
+ ...(p?.opti.enabled?[{id:'upscale',title:'Upscaling output',phase:4}]:[]),
+ {id:'review',title:'Review & apply',phase:5}
 ];}
 function normalizeReShade(p){if(p.reshade.mode!=='off')p.reshade.mode=p.opti.enabled?'opti':'standalone';return p;}
 // Runtime installers may add prefix registry entries. Continue automatically only
@@ -83,7 +83,7 @@ function EffectPicker({effects,selected,toggle,close,catalogIssue}){
    !matches.length&&h('p',{className:'df-subtle'},'No matching effects.')),
   h('div',{className:'df-overlay-foot'},h('span',{className:'df-subtle'},'Saved to this game’s draft.'),h(StudioButton,{className:'df-primary',onClick:close},'Done')));
 }
-function SetupPrompt({model,busy,confirm,cancel,pageRef}){
+function SetupPrompt({model,busy,confirm,secondary,cancel,pageRef}){
  const root=useRef(null),reader=useRef(null),[page,setPage]=useState(0);
  const chunks=useMeasuredPages(model.text,reader),current=Math.min(page,chunks.length-1);
  pageRef.current=direction=>setPage(x=>clampNumber(x+direction,0,chunks.length-1));
@@ -92,23 +92,88 @@ function SetupPrompt({model,busy,confirm,cancel,pageRef}){
   h('div',{className:'df-overlay-head'},h('h2',null,model.title)),
   h('div',{ref:reader,className:'df-reader','data-df-reader':true},chunks[current]),
   chunks.length>1&&h('div',{className:'df-overlay-foot'},h(StudioButton,{disabled:current===0||busy,onClick:()=>setPage(x=>x-1)},'Previous page'),h('span',{className:'df-subtle'},`${current+1} / ${chunks.length}`),h(StudioButton,{disabled:current===chunks.length-1||busy,onClick:()=>setPage(x=>x+1)},'Next page')),
-  h('div',{className:'df-overlay-foot'},h(StudioButton,{disabled:busy,onClick:cancel},model.kind==='blocked'?'Close':'Cancel'),model.kind!=='blocked'&&h(StudioButton,{className:'df-primary',disabled:busy,onClick:confirm},model.label)));
+  h('div',{className:'df-overlay-foot'},h(StudioButton,{disabled:busy,onClick:cancel},model.kind==='blocked'?'Close':'Cancel'),model.secondary&&h(StudioButton,{disabled:busy,onClick:secondary},model.secondary),model.kind!=='blocked'&&model.canConfirm!==false&&h(StudioButton,{className:'df-primary',disabled:busy,onClick:confirm},model.label)));
 }
-function SetupStudio({frameRef,frameHeight,p,step,done,content,summary,review,busy,message,error,progress,onNext,onBack,onRefresh,onExit,effects,toggleEffect,runtimeJob,cancelRuntime,runtimeLog,effectIssues,prompt,onPromptConfirm,onPromptCancel,onForce}){
+/* Steam browser input maps R2 to a mouse click as well. Reserve triggers for
+   setup navigation and suppress that click inside this frame, including dialogs. */
+function useSetupNavigation(frameRef,actions){
+ const live=useRef(actions),bridge=useRef(null);live.current=actions;
+ useEffect(()=>{
+  const frame=frameRef.current,doc=frame?.ownerDocument,view=doc?.defaultView;if(!view)return;
+  const input=view.SteamClient?.Input||globalThis.SteamClient?.Input;
+  const held=new Set();let subscription=null,lastCode=0,lastTime=-Infinity,suppressUntil=0,active=true,windowActive=true,raf=null;
+  const available=()=>active&&windowActive&&frame.isConnected&&doc.visibilityState!=='hidden'&&(!doc.hasFocus||doc.hasFocus())&&(doc.activeElement===doc.body||frame.contains(doc.activeElement));
+  const dispatch=code=>{
+   if(!available()||code<5||code>8)return;
+   const now=view.performance.now();
+   if(code>=7)suppressUntil=now+220;
+   if(code===lastCode&&now-lastTime<150)return;
+   lastCode=code;lastTime=now;
+   const action=live.current;if(action.locked||action.done)return;
+   action.navigate(code<7?'phase':'screen',code===5||code===7?-1:1);
+  };
+  bridge.current=code=>dispatch(code);
+  const blockClick=event=>{
+   if(available()&&frame.contains(event.target)&&(held.has(7)||held.has(8)||view.performance.now()<suppressUntil)){
+    event.preventDefault();event.stopImmediatePropagation();
+   }
+  };
+  const events=['pointerdown','pointerup','mousedown','mouseup','click','dblclick','contextmenu'];
+  events.forEach(name=>doc.addEventListener(name,blockClick,true));
+  const button=(code,pressed)=>{
+   if(!available()){held.clear();return;}
+   if(!pressed){if(held.delete(code)&&code>=7)suppressUntil=view.performance.now()+220;return;}
+   if(held.has(code))return;held.add(code);dispatch(code);
+  };
+  try{
+   if(typeof input?.RegisterForControllerInputMessages==='function')subscription=input.RegisterForControllerInputMessages((_index,code,pressed)=>{
+    const mapped={28:7,29:8,30:5,31:6}[code];if(mapped)button(mapped,pressed);
+   });
+   else if(typeof input?.RegisterForControllerStateChanges==='function')subscription=input.RegisterForControllerStateChanges(packets=>{
+    for(const packet of packets||[]){const bits=Number(packet.ulButtons)||0;for(const [code,mask] of [[8,1],[7,2],[6,4],[5,8]])button(code,!!(bits&mask));}
+   });
+   else{
+    const poll=()=>{if(!active)return;try{const pad=[...(view.navigator.getGamepads?.()||[])].find(p=>p?.connected&&p.mapping==='standard');if(pad)for(const [code,index] of [[5,4],[6,5],[7,6],[8,7]])button(code,!!pad.buttons[index]?.pressed);}catch{}raf=view.requestAnimationFrame(poll);};
+    raf=view.requestAnimationFrame(poll);
+   }
+  }catch{}
+  const blur=()=>{windowActive=false;held.clear();suppressUntil=0;},focus=()=>{windowActive=true;};
+  view.addEventListener('blur',blur);view.addEventListener('focus',focus);
+  return()=>{active=false;bridge.current=null;held.clear();if(typeof subscription==='function')subscription();else subscription?.unregister?.();if(raf!==null)view.cancelAnimationFrame(raf);events.forEach(name=>doc.removeEventListener(name,blockClick,true));view.removeEventListener('blur',blur);view.removeEventListener('focus',focus);};
+ },[]);
+ return event=>{const code=event.detail?.button;if(code>=5&&code<=8){event.preventDefault?.();event.stopPropagation?.();bridge.current?.(code);}};
+}
+
+function OptiConfigEditor({model,busy,error,save,cancel}){
+ const [value,setValue]=useState(model.text),[manual,setManual]=useState(model.manual),root=useRef(null),editor=useRef(null);
+ useEffectListScroll(editor);
+ useEffect(()=>{editor.current?.focus({preventScroll:true});},[]);
+ return h(U.Focusable,{ref:root,className:'df-overlay df-opti-editor','data-df-overlay':true,role:'dialog','aria-modal':true,'aria-label':'Advanced OptiScaler settings',onCancel:e=>{e?.stopPropagation?.();if(!busy)cancel();}},
+  h('div',{className:'df-overlay-head'},h('h2',null,'Advanced OptiScaler settings'),h(StudioButton,{className:'df-icon',disabled:busy,'aria-label':'Close OptiScaler editor',onClick:cancel},studioIcon('close'))),
+  h('div',{className:'df-subtle'},`OptiScaler ${model.version||''} · ${manual?'Manual INI':'Guided settings'} · Steam + X opens the keyboard.`),
+  h('div',{className:'df-setup-bottom'},h(StudioButton,{disabled:busy||model.installed===null||model.installed===undefined,onClick:()=>{setValue(model.installed);setManual(true);}},'Load installed settings'),h(StudioButton,{disabled:busy,onClick:()=>{setValue(model.defaults);setManual(false);}},'Use guided settings')),
+  h('textarea',{ref:editor,'aria-label':'OptiScaler.ini','data-df-scroll':true,spellCheck:false,disabled:busy,value,onChange:e=>{setValue(e.target.value);setManual(true);},style:{flex:1,minHeight:0,width:'100%',resize:'none',boxSizing:'border-box',fontFamily:'monospace',fontSize:12,lineHeight:1.4,overflowY:'auto',touchAction:'pan-y'}}),
+  h('div',{className:'df-subtle'},'Manual values replace the guided INI presets. LoadReshade follows the ReShade toggle. Saving only updates this game’s draft.'),
+  error&&h('div',{className:'df-setup-alert',role:'alert'},error),
+  h('div',{className:'df-overlay-foot'},h(StudioButton,{disabled:busy,onClick:cancel},'Cancel'),h(StudioButton,{className:'df-primary',disabled:busy,onClick:()=>save(manual?value:'')},busy?'Checking…':'Save to draft')));
+}
+
+function SetupStudio({frameRef,frameHeight,p,step,done,content,summary,review,busy,message,error,progress,onNext,onNavigate,onBack,onRefresh,onExit,effects,toggleEffect,runtimeJob,cancelRuntime,runtimeLog,effectIssues,optiEditor,onOptiSave,onOptiCancel,prompt,onPromptConfirm,onPromptSecondary,onPromptCancel,onForce}){
  const [size,setSize]=useState({width:1280,height:688}),[overlay,setOverlay]=useState(null),returnFocus=useRef(null),pageRef=useRef(null),cursor=useRef(null);
- const steps=setupSteps(p),index=steps.findIndex(x=>x.id===step),meta=steps[index]||{title:'Lossless Scaling DLL',phase:3};
- const inventory=studioInventory(content),short=size.height<550,narrow=size.width<650,locked=busy||!!overlay||!!prompt;
+ const steps=setupSteps(p),index=steps.findIndex(x=>x.id===step),meta=steps[index]||{title:'Lossless Scaling DLL',phase:4};
+ const inventory=studioInventory(content),short=size.height<550,narrow=size.width<650,locked=busy||!!overlay||!!prompt||!!optiEditor;
+ const navEvent=useSetupNavigation(frameRef,{locked,done,navigate:onNavigate});
  const close=()=>{setOverlay(null);const view=frameRef.current?.ownerDocument.defaultView;view?.requestAnimationFrame(()=>{if(returnFocus.current?.isConnected)returnFocus.current.focus({preventScroll:true});(frameRef.current?.querySelector('.df-setup-controls .df-primary')||studioFocusable(frameRef.current)[0])?.focus({preventScroll:true});});};
  const open=model=>{returnFocus.current=frameRef.current?.ownerDocument.activeElement;setOverlay(model);};
- useEffect(()=>{if(prompt)return;const view=frameRef.current?.ownerDocument.defaultView;const timer=view?.requestAnimationFrame(()=>{const controls=frameRef.current?.querySelector('.df-setup-controls');if(controls&&!frameRef.current.contains(controls.ownerDocument.activeElement))studioFocusable(controls)[0]?.focus({preventScroll:true});});return()=>{if(timer!==undefined)view?.cancelAnimationFrame(timer);};},[prompt]);
- useStudioInput(frameRef,cursor,{back:()=>{if(prompt){if(!busy)onPromptCancel();}else if(overlay)close();else if(!busy)onBack();},page:direction=>{if(overlay||prompt)pageRef.current?.(direction);}});
+ useEffect(()=>{if(prompt||optiEditor)return;const view=frameRef.current?.ownerDocument.defaultView;const timer=view?.requestAnimationFrame(()=>{const controls=frameRef.current?.querySelector('.df-setup-controls');if(controls&&!frameRef.current.contains(controls.ownerDocument.activeElement))studioFocusable(controls)[0]?.focus({preventScroll:true});});return()=>{if(timer!==undefined)view?.cancelAnimationFrame(timer);};},[prompt,optiEditor]);
+ useStudioInput(frameRef,cursor,{back:()=>{if(optiEditor){if(!busy)onOptiCancel();}else if(prompt){if(!busy)onPromptCancel();}else if(overlay)close();else if(!busy)onBack();},page:direction=>{if(overlay||prompt)pageRef.current?.(direction);}});
  useEffect(()=>{const el=frameRef.current,view=el?.ownerDocument.defaultView;if(!el||!view)return;const measure=()=>setSize({width:el.clientWidth,height:el.clientHeight});measure();let observer;try{observer=new view.ResizeObserver(measure);observer.observe(el);}catch{}view.addEventListener('resize',measure);return()=>{observer?.disconnect();view.removeEventListener('resize',measure);};},[]);
  useEffect(()=>{setOverlay(step==='effects'?{type:'effects'}:null);if(step==='effects')return;const view=frameRef.current?.ownerDocument.defaultView;const timer=view?.requestAnimationFrame(()=>{const el=frameRef.current?.querySelector('.df-setup-fields');studioFocusable(el||frameRef.current)[0]?.focus({preventScroll:true});});return()=>{if(timer!==undefined)view?.cancelAnimationFrame(timer);};},[step]);
  const details=()=>open({type:'reader',title:'Apply details',text:[...((review?.blockers||[]).map(x=>`${x.title}\n${x.detail}`)),...(review?.resolutions||[]).map(x=>`${x.title}\n${x.before} → ${x.after}\n${x.detail}`),...(review?.conflicts||[]).map(x=>JSON.stringify(x)),...(review?.warnings||[]),...(p?.reshade.techniques||[])].join('\n\n')||'No additional details.'});
- return h(U.Focusable,{ref:frameRef,className:'df-studio df-setup','data-df-frame':true,'data-df-studio':true,'data-setup-step':step,'data-setup-done':done,'data-short':short,'data-narrow':narrow,style:{height:frameHeight},'flow-children':'column',onCancel:e=>{e?.stopPropagation?.();if(prompt){if(!busy)onPromptCancel();}else if(overlay)close();else if(!busy)onBack();}},h('style',null,studioCSS+setupCSS),h('div',{className:'df-atmosphere'}),
-  h('header',{className:'df-top'},h('div',{className:'df-brand'},h('span',{className:'df-logo'},studioIcon('fusion',22)),'Deck Fusion'),h('span',{className:'df-beta'},'v0.3-beta6'),h('div',{className:'df-game'},h('strong',null,p?.name||'Choose a game')),h(StudioButton,{onClick:onExit,disabled:locked,'aria-label':'Exit to Steam Home',className:'df-icon'},studioIcon('close',18))),
+ return h(U.Focusable,{ref:frameRef,className:'df-studio df-setup','data-df-frame':true,'data-df-studio':true,'data-setup-step':step,'data-setup-done':done,'data-short':short,'data-narrow':narrow,style:{height:frameHeight},'flow-children':'column',onButtonDown:navEvent,onCancel:e=>{e?.stopPropagation?.();if(optiEditor){if(!busy)onOptiCancel();}else if(prompt){if(!busy)onPromptCancel();}else if(overlay)close();else if(!busy)onBack();}},h('style',null,studioCSS+setupCSS),h('div',{className:'df-atmosphere'}),
+  h('header',{className:'df-top'},h('div',{className:'df-brand'},h('span',{className:'df-logo'},studioIcon('fusion',22)),'Deck Fusion'),h('span',{className:'df-beta'},'v0.3-beta8'),h('div',{className:'df-game'},h('strong',null,p?.name||'Choose a game')),h(StudioButton,{onClick:onExit,disabled:locked,'aria-label':'Exit to Steam Home',className:'df-icon'},studioIcon('close',18))),
   h('main',{className:'df-setup-main'},h('div',{className:'df-phase-list','aria-label':'Setup progress'},...SETUP_PHASES.map((title,i)=>h('span',{key:title,className:'df-phase','data-active':i===meta.phase||done,'aria-current':i===meta.phase?'step':undefined},`${i+1}  ${title}`))),
-   h('div',{className:'df-setup-heading'},h('h1',null,done?'Setup complete':meta.title),!done&&inventory.notes.length>0&&h(StudioButton,{className:'df-help',disabled:locked,'aria-label':'Step information',onClick:()=>open({type:'reader',title:meta.title,text:inventory.notes.map(x=>x.text).join('\n\n')})},studioIcon('info',18)),!done&&h('span',{className:'df-subtle'},index<0?'LSFG setup':`${index+1} / ${steps.length}`)),
+   h('div',{className:'df-setup-heading'},h('h1',null,done?'Setup complete':meta.title),!done&&inventory.notes.length>0&&h(StudioButton,{className:'df-help',disabled:locked,'aria-label':'Step information',onClick:()=>open({type:'reader',title:meta.title,text:inventory.notes.map(x=>x.text).join('\n\n')})},studioIcon('info',18)),!done&&h('span',{className:'df-subtle'},index<0?'LSFG setup':`Tab ${steps.filter(x=>x.phase===meta.phase).findIndex(x=>x.id===step)+1} / ${steps.filter(x=>x.phase===meta.phase).length}`)),
    h('div',{className:'df-setup-body'},
     done?h('div',{className:'df-setup-notes'},...inventory.notes.map((x,i)=>h('p',{key:i},x.text))):step==='review'?h(R.Fragment,null,
      h('dl',{className:'df-setup-summary'},...summary.map(([title,value])=>h('div',{key:title},h('dt',null,title),h('dd',{'data-truncate':title==='Executable',title:value},value)))),
@@ -119,7 +184,7 @@ function SetupStudio({frameRef,frameHeight,p,step,done,content,summary,review,bu
       h('div',{className:'df-setup-notes'},...inventory.notes.map((x,i)=>h('p',{key:i},x.text)))),
     error&&h('div',{className:'df-setup-alert',role:'alert'},h('span',null,error),h(StudioButton,{disabled:locked,onClick:()=>open({type:'reader',title:'Operation details',text:error})},'Details'))),
    h('div',{className:'df-setup-controls'},!done&&h(StudioButton,{onClick:onBack,disabled:locked||step==='game'},'Back'),!done&&runtimeLog&&['runtimes','review'].includes(step)&&h(StudioButton,{disabled:locked,onClick:()=>open({type:'reader',title:'Runtime installer log',text:runtimeLog})},'Installer log'),!done&&step==='review'&&h(R.Fragment,null,h(StudioButton,{onClick:details,disabled:locked},'Details'),h(StudioButton,{onClick:onRefresh,disabled:locked,'aria-label':'Refresh review'},'Refresh'),h(StudioButton,{onClick:onForce,disabled:locked,'aria-label':'Review force apply'},'Force apply…')),h(StudioButton,{className:'df-primary',disabled:locked||(!done&&!p)||(!done&&step==='review'&&(!review?.approval_token||!!review.blockers?.length)),onClick:done?onExit:onNext},done?'Return to Steam Home':busy?'Working…':step==='review'?'Apply this game':'Next'))),
-  h('footer',{className:'df-footer'},h('span',null,'D-pad / left stick · A select · B back'),h('span',{className:'df-status',role:'status'},message||'Draft'),runtimeJob&&h(StudioButton,{onClick:cancelRuntime},'Cancel installation')),
+  h('footer',{className:'df-footer'},h('span',null,'L1/R1 steps · L2/R2 tabs · A select · B back'),h('span',{className:'df-status',role:'status'},message||'Draft'),runtimeJob&&h(StudioButton,{onClick:cancelRuntime},'Cancel installation')),
   progress!==null&&h('progress',{className:'df-progress',max:1,value:progress,'aria-label':'Operation progress'}),
-  prompt?h(SetupPrompt,{key:prompt.kind+prompt.text,model:prompt,busy,confirm:onPromptConfirm,cancel:onPromptCancel,pageRef}):overlay&&(overlay.type==='effects'?h(EffectPicker,{effects,selected:p?.reshade.techniques||[],toggle:toggleEffect,close,catalogIssue:effectIssues}):h(StudioOverlay,{model:overlay,close,short,narrow,pageRef})));
+  optiEditor?h(OptiConfigEditor,{key:optiEditor.appid,model:optiEditor,busy,error,save:onOptiSave,cancel:onOptiCancel}):prompt?h(SetupPrompt,{key:prompt.kind+prompt.text,model:prompt,busy,confirm:onPromptConfirm,secondary:onPromptSecondary,cancel:onPromptCancel,pageRef}):overlay&&(overlay.type==='effects'?h(EffectPicker,{effects,selected:p?.reshade.techniques||[],toggle:toggleEffect,close,catalogIssue:effectIssues}):h(StudioOverlay,{model:overlay,close,short,narrow,pageRef})));
 }

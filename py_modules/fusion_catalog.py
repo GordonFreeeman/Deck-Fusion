@@ -22,7 +22,7 @@ DEFAULT_PROFILE = {
     'lsfg': {'enabled': False, 'multiplier': 2, 'flow_scale': 0.75, 'performance_mode': True,
              'allow_fp16': True, 'respect_deck_limiter': True, 'override_present_mode': True, 'preserve_swapchain_image_count': False},
     'base_fps': 0,
-    'opti': {'enabled': False, 'proxy': 'dxgi', 'dx11': 'fsr31', 'dx12': 'fsr31', 'vulkan': 'fsr31',
+    'opti': {'manual_ini': '', 'manual_reset': False, 'enabled': False, 'proxy': 'dxgi', 'dx11': 'fsr31', 'dx12': 'fsr31', 'vulkan': 'fsr31',
              'fsr_mode': 'auto', 'fsr4_rdna2_fix': False, 'fsr4_watermark': False, 'mouse_input': 'auto', 'steam_input': 'auto', 'fg': False, 'enable_nvapi': False, 'spoof': 'auto', 'overrides': {}},
     'reshade': {'mode': 'off', 'proxy': 'auto', 'performance': True, 'techniques': [], 'uniforms': {},
                 'packs': ['standard', 'sweetfx', 'fxshaders'], 'raw_preset': '', 'raw_config': '', 'overlay_key': 36},

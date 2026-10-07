@@ -1,4 +1,4 @@
-/* Deck Fusion Studio v0.3-beta6. Local UI only; all mutations use the existing Manager. */
+/* Deck Fusion Studio v0.3-beta8. Local UI only; all mutations use the existing Manager. */
 const STUDIO_TABS=[
  ['library','Library','grid'], ['lsfg','Motion','wave'],
  ['opti','Upscaling','layers'], ['reshade','ReShade','spark'],
@@ -235,7 +235,7 @@ function Studio({frameRef,frameHeight,tabs,tab,setTab,p,dirty,busy,message,error
  const pageTitle=index=>controls[index*pageSize]?.label||'Overview';
  const notesText=inventory.notes.map((x,i)=>`${String(i+1).padStart(2,'0')} / ${x.warning?'COMPATIBILITY':'INFORMATION'}\n${x.text}`).join('\n\n');
  return h(U.Focusable,{ref:frameRef,'data-df-frame':true,'data-df-studio':true,'data-short':short,'data-narrow':narrow,'data-motion':motion,className:'df-studio',style:{height:frameHeight},onButtonDown:navEvent,onCancel:e=>{e?.stopPropagation?.();if(overlay)close();else exitStudio();},'flow-children':'column'},h('style',null,studioCSS),h('div',{className:'df-atmosphere'}),
-  h('header',{className:'df-top'},h('div',{className:'df-brand'},h('span',{className:'df-logo'},studioIcon('fusion',23)),'Deck Fusion'),h('span',{className:'df-beta'},'v0.3-beta6'),h('div',{className:'df-game'},h('span',{className:'df-eyebrow'},'Active game'),h('strong',{title:p?.name},p?.name||'Select a game'),h('span',{className:dirty?'df-dirty':'df-eyebrow'},dirty?'● Unapplied changes':'Saved configuration')),
+  h('header',{className:'df-top'},h('div',{className:'df-brand'},h('span',{className:'df-logo'},studioIcon('fusion',23)),'Deck Fusion'),h('span',{className:'df-beta'},'v0.3-beta8'),h('div',{className:'df-game'},h('span',{className:'df-eyebrow'},'Active game'),h('strong',{title:p?.name},p?.name||'Select a game'),h('span',{className:dirty?'df-dirty':'df-eyebrow'},dirty?'● Unapplied changes':'Saved configuration')),
    h(StudioButton,{className:'df-icon df-motion-control',onClick:()=>{const next=!motion;setMotion(next);try{sessionStorage.setItem('deck-fusion-motion',next?'on':'off');}catch{}},'aria-label':motion?'Pause interface animation':'Enable interface animation'},studioIcon('spark',16)),
    h(StudioButton,{className:'df-primary',disabled:busy||!p,onClick:onApply},studioIcon('check',16),narrow?'Apply':'Review & apply'),h(StudioButton,{className:'df-icon',onClick:()=>exitStudio(),'aria-label':'Back to Steam'},studioIcon('close',18))),
   h('div',{className:'df-body'},h('nav',{className:'df-nav','aria-label':'Configuration tabs'},h('div',{className:'df-eyebrow df-nav-label'},'Expert Mode'),...STUDIO_TABS.map(([id,label,icon])=>h(StudioButton,{key:id,className:'df-nav-button','data-active':tab===id,'aria-label':label,'aria-current':tab===id?'page':undefined,disabled:busy,onClick:()=>setTab(id)},studioIcon(icon,18),h('span',null,label))),null),

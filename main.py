@@ -16,6 +16,7 @@ import uuid
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE / 'py_modules'))
 from fusion_engine import Engine
+from fusion_removal import GraphicsRemoval
 from fusion_util import FusionError, atomic_json
 
 try:
@@ -52,7 +53,7 @@ def exposed(function):
 class Plugin:
     async def _main(self):
         self._initialize()
-        LOG.info('Deck Fusion 0.3-beta6 initialized, no root privilege requested.')
+        LOG.info('Deck Fusion 0.3-beta8 initialized, no root privilege requested.')
 
     def _initialize(self):
         if getattr(self, '_engine', None) is not None: return
@@ -93,6 +94,10 @@ class Plugin:
                 if action == 'scan': return e.scan(appid)
                 if action == 'detect_api': return e.detect_api(payload['profile'], payload.get('launch', ''))
                 if action == 'launch_cleanup': return e.launch_cleanup(appid, payload.get('launch', ''))
+                if action == 'removal_plan': return GraphicsRemoval(e).plan(payload)
+                if action == 'removal_prepare': return GraphicsRemoval(e).prepare(payload, progress)
+                if action == 'opti_editor':return e.opti_editor(payload['profile'])
+                if action == 'opti_manual':return e.opti_manual(payload['profile'],payload.get('text',''))
                 if action == 'schema': return e.schema(appid)
                 if action == 'wine_context': return e.wine_context(payload['profile'], payload.get('launch', ''))
                 if action == 'diagnostics': return e.diagnostics(appid)
@@ -145,7 +150,7 @@ class Plugin:
     async def start_job(self, action: str, payload: dict):
         self._initialize()
         if self._closing: raise FusionError('Plugin is unloading.')
-        if action not in ('install','shader','common_shaders','lsfg_setup','legacy_disable','scan','prepare','review','plan','check_updates','bundled_setup','runtime_status','runtime_plan','runtime_install','runtime_restore','runtime_helper_plan','runtime_helper_install'):
+        if action not in ('install','shader','common_shaders','lsfg_setup','legacy_disable','scan','prepare','review','plan','removal_plan','removal_prepare','check_updates','bundled_setup','runtime_status','runtime_plan','runtime_install','runtime_restore','runtime_helper_plan','runtime_helper_install'):
             raise FusionError('Unsupported job.')
         if not isinstance(payload,dict) or len(json.dumps(payload)) > 3*1024*1024:
             raise FusionError('Invalid job payload.')

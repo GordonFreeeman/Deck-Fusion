@@ -1,5 +1,21 @@
 # Changelog
 
+## v0.3-beta8
+
+- Add Advanced OptiScaler settings to the guided Upscaling output screen, with a complete INI editor, installed-file import and a return to guided settings.
+- Save manual settings per game as a draft. Apply uses those values instead of the guided INI presets and keeps the existing file backup and recovery process.
+- Keep ReShade chaining controlled by the feature toggle, derive runtime-sensitive settings from the manual INI, and reject invalid INIs and incompatible frame-generation choices.
+- Show manual configuration in the final review. Keep the full bundle's dependency versions unchanged.
+
+## v0.3-beta7
+
+- Add removal of existing OptiScaler and ReShade setups from the game selection screen, with a file-by-file review and Undo.
+- Identify external injector DLLs by verified cached hashes or structured version resources. Keep unknown DLLs, edited files, untracked presets, shared shader folders and untracked SDK libraries.
+- Restore verified originals for unchanged managed files and keep snapshots of every removal change. Refuse stale reviews, running games, unsafe prefix overrides and Undo over later edits.
+- Keep LSFG, frame caps and Windows runtimes when removing OptiScaler / ReShade; only remove launch overrides for identified loaders that are now absent.
+- Split guided setup into six phases. L1/R1 change phases; L2/R2 change tabs within a phase. Preserve validation and block trigger-generated mouse clicks from confirming actions.
+- Keep the full bundle's dependency versions unchanged.
+
 ## v0.3-beta6
 
 - Repair stale Winetricks receipts after the prefix backup so they cannot skip or block the selected runtime installation. Keep unrelated receipts and verify the resulting runtime before applying graphics settings.
