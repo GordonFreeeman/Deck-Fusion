@@ -73,9 +73,10 @@ function useEffectListScroll(listRef,nativeScroll=false){
 function EffectPicker({effects,selected,toggle,close,catalogIssue}){
  const [query,setQuery]=useState(''),root=useRef(null),list=useRef(null);
  useEffectListScroll(list,!!U.ScrollPanel);
+ const dialogFocus=useStudioDialogFocus(root);
  useEffect(()=>{(studioFocusable(list.current)[0]||studioFocusable(root.current)[0])?.focus({preventScroll:true});},[]);
  const matches=effects.filter(x=>`${x.name} ${x.file} ${x.pack}`.toLowerCase().includes(query.toLowerCase()));
- return h(U.Focusable,{ref:root,className:'df-overlay','data-df-overlay':true,role:'dialog','aria-modal':true,'aria-label':'ReShade effects',onCancel:e=>{e?.stopPropagation?.();close();}},
+ return h(U.Focusable,{ref:root,...dialogFocus,className:'df-overlay','data-df-overlay':true,role:'dialog','aria-modal':true,'aria-label':'ReShade effects',onCancel:e=>{e?.stopPropagation?.();close();}},
   h('div',{className:'df-overlay-head'},h('h2',null,'ReShade effects'),h(StudioButton,{'aria-label':'Close effects',onClick:close,className:'df-icon'},studioIcon('close'))),
   h('input',{'aria-label':'Search effects',placeholder:'Search effects…',value:query,onChange:e=>setQuery(e.target.value)}),
   h('div',{className:'df-subtle'},`${selected.length} enabled · ${matches.length} available · Right stick / touch to scroll`),
@@ -87,10 +88,11 @@ function EffectPicker({effects,selected,toggle,close,catalogIssue}){
 }
 function SetupPrompt({model,busy,confirm,secondary,cancel,pageRef}){
  const root=useRef(null),reader=useRef(null),[page,setPage]=useState(0);
+ const dialogFocus=useStudioDialogFocus(root);
  const chunks=useMeasuredPages(model.text,reader),current=Math.min(page,chunks.length-1);
  pageRef.current=direction=>setPage(x=>clampNumber(x+direction,0,chunks.length-1));
  useEffect(()=>{studioFocusable(root.current)[0]?.focus({preventScroll:true});},[]);
- return h(U.Focusable,{ref:root,className:'df-overlay','data-df-overlay':true,role:'dialog','aria-modal':true,'aria-label':model.title,onCancel:e=>{e?.stopPropagation?.();if(!busy)cancel();}},
+ return h(U.Focusable,{ref:root,...dialogFocus,className:'df-overlay','data-df-overlay':true,role:'dialog','aria-modal':true,'aria-label':model.title,onCancel:e=>{e?.stopPropagation?.();if(!busy)cancel();}},
   h('div',{className:'df-overlay-head'},h('h2',null,model.title)),
   h('div',{ref:reader,className:'df-reader','data-df-reader':true},chunks[current]),
   chunks.length>1&&h('div',{className:'df-overlay-foot'},h(StudioButton,{disabled:current===0||busy,onClick:()=>setPage(x=>x-1)},'Previous page'),h('span',{className:'df-subtle'},`${current+1} / ${chunks.length}`),h(StudioButton,{disabled:current===chunks.length-1||busy,onClick:()=>setPage(x=>x+1)},'Next page')),
@@ -146,53 +148,10 @@ function useSetupNavigation(frameRef,actions){
  return event=>{const code=event.detail?.button;if(code>=5&&code<=8){event.preventDefault?.();event.stopPropagation?.();bridge.current?.(code);}};
 }
 
-/* The INI text area is not a Steam navigation node. Register its container and
-   keep both Steam navigation and browser focus inside this editor. */
-function useOptiEditorFocus(root,editor,entry){
- useEffect(()=>{
-  const dialog=root.current,doc=dialog?.ownerDocument,frame=dialog?.closest('[data-df-frame]');if(!dialog||!frame)return;
-  const previous=doc.activeElement,siblings=[...frame.children].filter(el=>el!==dialog&&!el.contains(dialog)&&['HEADER','MAIN','FOOTER'].includes(el.tagName));
-  const inert=siblings.map(el=>[el,el.hasAttribute('inert')]);siblings.forEach(el=>el.setAttribute('inert',''));
-  let last=entry.current,redirecting=false;
-  const focus=event=>{
-   if(dialog.contains(event.target)){last=event.target;return;}
-   // Steam's own menus and on-screen keyboard remain outside this boundary.
-   if(!redirecting&&frame.contains(event.target)){
-    redirecting=true;(last?.isConnected&&!last.disabled?last:entry.current)?.focus({preventScroll:true});redirecting=false;
-   }
-  };
-  doc.addEventListener('focusin',focus,true);entry.current?.focus({preventScroll:true});
-  return()=>{doc.removeEventListener('focusin',focus,true);inert.forEach(([el,wasInert])=>{if(!wasInert)el.removeAttribute('inert');});if(previous?.isConnected&&frame.contains(previous)&&previous.getAttribute('aria-disabled')!=='true')previous.focus({preventScroll:true});};
- },[]);
- const move=direction=>{
-  const dialog=root.current;if(!dialog)return;
-  if(dialog.ownerDocument.activeElement===editor.current)entry.current?.focus({preventScroll:true});
-  const all=studioFocusable(dialog),active=dialog.ownerDocument.activeElement;
-  if(!all.includes(active)){all[0]?.focus({preventScroll:true});return;}
-  const a=active.getBoundingClientRect(),vertical=['up','down'].includes(direction),sign=['up','left'].includes(direction)?-1:1;
-  // Use the overlapping edges of the wide editor, so it remains reachable
-  // between its toolbar and footer instead of being skipped by center scoring.
-  const choices=all.filter(el=>el!==active).map(el=>{
-   const b=el.getBoundingClientRect(),forward=sign*(vertical?b.y+b.height/2-a.y-a.height/2:b.x+b.width/2-a.x-a.width/2);
-   const gap=vertical?Math.max(0,a.x-b.x-b.width,b.x-a.x-a.width):Math.max(0,a.y-b.y-b.height,b.y-a.y-a.height);
-   return {el,forward,gap};
-  }).filter(x=>x.forward>4).sort((a,b)=>a.gap-b.gap||a.forward-b.forward);
-  choices[0]?.el.focus({preventScroll:true});
- };
- return {
-  onButtonDown:event=>{const direction={9:'up',10:'down',11:'left',12:'right'}[event.detail?.button];if(direction){event.preventDefault?.();event.stopPropagation?.();move(direction);}},
-  onKeyDownCapture:event=>{
-   if(event.key==='Tab'){
-    const all=studioFocusable(root.current),index=all.indexOf(root.current.ownerDocument.activeElement),next=event.shiftKey?(index<=0?all.length-1:index-1):(index+1)%all.length;
-    event.preventDefault();event.stopPropagation();all[next]?.focus({preventScroll:true});
-   }else if(event.target!==editor.current){const direction={ArrowUp:'up',ArrowDown:'down',ArrowLeft:'left',ArrowRight:'right'}[event.key];if(direction){event.preventDefault();event.stopPropagation();move(direction);}}
-  }
- };
-}
 function OptiConfigEditor({model,busy,error,save,cancel}){
  const [value,setValue]=useState(model.text),[manual,setManual]=useState(model.manual),root=useRef(null),editor=useRef(null),entry=useRef(null);
  useEffectListScroll(editor);
- const focus=useOptiEditorFocus(root,editor,entry);
+ const focus=useStudioDialogFocus(root,{editor,entry});
  return h(U.Focusable,{ref:root,className:'df-overlay df-opti-editor','data-df-overlay':true,role:'dialog','aria-modal':true,'aria-label':'Advanced OptiScaler settings','flow-children':'column',...focus,onCancel:e=>{e?.stopPropagation?.();if(!busy)cancel();}},
   h('div',{className:'df-overlay-head'},h('h2',null,'Advanced OptiScaler settings'),h(StudioButton,{className:'df-icon',disabled:busy,'aria-label':'Close OptiScaler editor',onClick:cancel},studioIcon('close'))),
   h('div',{className:'df-subtle'},`OptiScaler ${model.version||''} · ${manual?'Manual INI':'Guided settings'} · D-pad navigates · A edits · Steam + X keyboard.`),
@@ -217,7 +176,7 @@ function SetupStudio({frameRef,frameHeight,p,step,done,content,summary,review,bu
  useEffect(()=>{setOverlay(step==='effects'?{type:'effects'}:null);if(step==='effects')return;const view=frameRef.current?.ownerDocument.defaultView;const timer=view?.requestAnimationFrame(()=>{const el=frameRef.current?.querySelector('.df-setup-fields');studioFocusable(el||frameRef.current)[0]?.focus({preventScroll:true});});return()=>{if(timer!==undefined)view?.cancelAnimationFrame(timer);};},[step]);
  const details=()=>open({type:'reader',title:'Apply details',text:[...((review?.blockers||[]).map(x=>`${x.title}\n${x.detail}`)),...(review?.resolutions||[]).map(x=>`${x.title}\n${x.before} → ${x.after}\n${x.detail}`),...(review?.conflicts||[]).map(x=>JSON.stringify(x)),...(review?.warnings||[]),...(p?.reshade.techniques||[])].join('\n\n')||'No additional details.'});
  return h(U.Focusable,{ref:frameRef,className:'df-studio df-setup','data-df-frame':true,'data-df-studio':true,'data-setup-step':step,'data-setup-done':done,'data-short':short,'data-narrow':narrow,style:{height:frameHeight},'flow-children':'column',onButtonDown:navEvent,onCancel:e=>{e?.stopPropagation?.();if(optiEditor){if(!busy)onOptiCancel();}else if(prompt){if(!busy)onPromptCancel();}else if(overlay)close();else if(!busy)onBack();}},h('style',null,studioCSS+setupCSS),h('div',{className:'df-atmosphere'}),
-  h('header',{className:'df-top'},h('div',{className:'df-brand'},h('span',{className:'df-logo'},studioIcon('fusion',22)),'Deck Fusion'),h('span',{className:'df-beta'},'v0.3-beta9'),h('div',{className:'df-game'},h('strong',null,p?.name||'Choose a game')),h(StudioButton,{onClick:onExit,disabled:locked,'aria-label':'Exit to Steam Home',className:'df-icon'},studioIcon('close',18))),
+  h('header',{className:'df-top'},h('div',{className:'df-brand'},h('span',{className:'df-logo'},studioIcon('fusion',22)),'Deck Fusion'),h('span',{className:'df-beta'},'v0.3-beta10'),h('div',{className:'df-game'},h('strong',null,p?.name||'Choose a game')),h(StudioButton,{onClick:onExit,disabled:locked,'aria-label':'Exit to Steam Home',className:'df-icon'},studioIcon('close',18))),
   h('main',{className:'df-setup-main'},h('div',{className:'df-phase-list','aria-label':'Setup progress'},...SETUP_PHASES.map((title,i)=>h('span',{key:title,className:'df-phase','data-active':i===meta.phase||done,'aria-current':i===meta.phase?'step':undefined},`${i+1}  ${title}`))),
    h('div',{className:'df-setup-heading'},h('h1',null,done?'Setup complete':meta.title),!done&&inventory.notes.length>0&&h(StudioButton,{className:'df-help',disabled:locked,'aria-label':'Step information',onClick:()=>open({type:'reader',title:meta.title,text:inventory.notes.map(x=>x.text).join('\n\n')})},studioIcon('info',18)),!done&&h('span',{className:'df-subtle'},index<0?'LSFG setup':`Tab ${steps.filter(x=>x.phase===meta.phase).findIndex(x=>x.id===step)+1} / ${steps.filter(x=>x.phase===meta.phase).length}`)),
    h('div',{className:'df-setup-body'},

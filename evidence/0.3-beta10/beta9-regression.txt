@@ -1,0 +1,34 @@
+✖ OptiScaler D-pad and Tab navigation stay in the editor and release the background on close (683.636543ms)
+✖ Steam direction events stay inside every editor panel, including repeated edge presses (368.321716ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 0
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1648.454809
+
+✖ failing tests:
+
+test at tests/studio-dom.test.mjs:692:1
+✖ OptiScaler D-pad and Tab navigation stay in the editor and release the background on close (683.636543ms)
+  TypeError: dialog.__direction is not a function
+      at dpad (file:///workspace/scratch/9e9270375a49/work/deck-fusion/tests/studio-dom.test.mjs:700:62)
+      at TestContext.<anonymous> (file:///workspace/scratch/9e9270375a49/work/deck-fusion/tests/studio-dom.test.mjs:701:3)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3)
+
+test at tests/studio-dom.test.mjs:746:1
+✖ Steam direction events stay inside every editor panel, including repeated edge presses (368.321716ms)
+  AssertionError [ERR_ASSERTION]: text isolates background
+      at TestContext.<anonymous> (file:///workspace/scratch/9e9270375a49/work/deck-fusion/tests/studio-dom.test.mjs:760:11)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }

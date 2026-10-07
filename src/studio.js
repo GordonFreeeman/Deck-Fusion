@@ -1,4 +1,4 @@
-/* Deck Fusion Studio v0.3-beta9. Local UI only; all mutations use the existing Manager. */
+/* Deck Fusion Studio v0.3-beta10. Local UI only; all mutations use the existing Manager. */
 const STUDIO_TABS=[
  ['library','Library','grid'], ['lsfg','Motion','wave'],
  ['opti','Upscaling','layers'], ['reshade','ReShade','spark'],
@@ -68,6 +68,67 @@ function studioMoveFocus(root,direction){
  const [dx,dy]=({left:[-1,0],right:[1,0],up:[0,-1],down:[0,1]})[direction];
  const scored=all.filter(x=>x!==active).map(el=>{const b=el.getBoundingClientRect(),bx=b.x+b.width/2-ax,by=b.y+b.height/2-ay;const forward=bx*dx+by*dy,cross=Math.abs(bx*dy-by*dx);return {el,forward,score:forward+cross*2.5};}).filter(x=>x.forward>4).sort((a,b)=>a.score-b.score);
  scored[0]?.el.focus({preventScroll:true});
+}
+/* Steam emits direction navigation separately from button presses. Consume that
+   navigation event at the dialog, including at an edge with no next control. */
+function useStudioDialogFocus(root,{entry,editor}={}){
+ const last=useRef(null);
+ useEffect(()=>{
+  const dialog=root.current,doc=dialog?.ownerDocument,frame=dialog?.closest('[data-df-frame]');if(!dialog||!frame)return;
+  const previous=doc.activeElement;
+  const siblings=[...frame.children].filter(el=>el!==dialog&&!el.contains(dialog));
+  const inert=siblings.map(el=>[el,el.hasAttribute('inert')]);siblings.forEach(el=>el.setAttribute('inert',''));
+  let redirecting=false;
+  const restore=()=>{
+   const target=last.current;
+   const valid=target?.isConnected&&dialog.contains(target)&&!target.disabled&&target.getAttribute('aria-disabled')!=='true';
+   (valid?target:studioFocusable(dialog)[0]||dialog).focus({preventScroll:true});
+  };
+  const focus=event=>{
+   if(dialog.contains(event.target)){last.current=event.target;return;}
+   // Allow Steam's own menus and on-screen keyboard outside the plugin frame.
+   if(!redirecting&&frame.contains(event.target)){redirecting=true;restore();redirecting=false;}
+  };
+  doc.addEventListener('focusin',focus,true);
+  (entry?.current||studioFocusable(dialog)[0]||dialog).focus({preventScroll:true});
+  return()=>{doc.removeEventListener('focusin',focus,true);inert.forEach(([el,wasInert])=>{if(!wasInert)el.removeAttribute('inert');});if(previous?.isConnected&&frame.contains(previous)&&previous.getAttribute('aria-disabled')!=='true')previous.focus({preventScroll:true});};
+ },[]);
+ useEffect(()=>{
+  const dialog=root.current,doc=dialog?.ownerDocument,frame=dialog?.closest('[data-df-frame]');if(!dialog||!frame)return;
+  // Filtering or disabling controls can remove the focused node. Recover in
+  // the panel without stealing focus from Steam's keyboard or menus.
+  if(doc.activeElement===doc.body||(frame.contains(doc.activeElement)&&!dialog.contains(doc.activeElement)))(studioFocusable(dialog)[0]||dialog).focus({preventScroll:true});
+ });
+ const consume=event=>{event.preventDefault?.();event.stopPropagation?.();};
+ const move=direction=>{
+  const dialog=root.current;if(!dialog)return;
+  if(editor?.current&&dialog.ownerDocument.activeElement===editor.current)entry?.current?.focus({preventScroll:true});
+  const all=studioFocusable(dialog),active=dialog.ownerDocument.activeElement;
+  if(!all.includes(active)){(all[0]||dialog).focus({preventScroll:true});return;}
+  const a=active.getBoundingClientRect(),vertical=['up','down'].includes(direction),sign=['up','left'].includes(direction)?-1:1;
+  // Overlapping edges keep a wide text editor reachable from its toolbar.
+  const choices=all.filter(el=>el!==active).map(el=>{
+   const b=el.getBoundingClientRect(),forward=sign*(vertical?b.y+b.height/2-a.y-a.height/2:b.x+b.width/2-a.x-a.width/2);
+   const gap=vertical?Math.max(0,a.x-b.x-b.width,b.x-a.x-a.width):Math.max(0,a.y-b.y-b.height,b.y-a.y-a.height);
+   return {el,forward,gap};
+  }).filter(x=>x.forward>4).sort((a,b)=>a.gap-b.gap||a.forward-b.forward);
+  const target=choices[0]?.el;target?.focus({preventScroll:true});
+  const pane=target?.closest('[data-df-scroll]');if(pane)scrollFocusedControl({target,currentTarget:pane});
+ };
+ return {
+  tabIndex:-1,
+  onGamepadDirection:event=>{const direction={9:'up',10:'down',11:'left',12:'right'}[event.detail?.button];if(direction){consume(event);move(direction);}},
+  // Direction events own focus. Shoulder buttons cannot reach route tabs.
+  onButtonDown:event=>{if(event.detail?.button>=5&&event.detail?.button<=8)consume(event);},
+  onKeyDownCapture:event=>{
+   if(event.key==='Tab'){
+    const dialog=root.current,all=studioFocusable(dialog),index=all.indexOf(dialog.ownerDocument.activeElement),next=event.shiftKey?(index<=0?all.length-1:index-1):(index+1)%all.length;
+    consume(event);(all[next]||dialog).focus({preventScroll:true});
+   }else if(!event.target.matches('input:not([type=range]),textarea')){
+    const direction={ArrowUp:'up',ArrowDown:'down',ArrowLeft:'left',ArrowRight:'right'}[event.key];if(direction&&!(event.target.matches('input[type=range]')&&['left','right'].includes(direction))){consume(event);move(direction);}
+   }
+  }
+ };
 }
 /* Uses the rendered document's realm, not Decky's hidden module Window. Native
    Steam handles focus navigation. This hook adds physical mouse, keyboard and a
@@ -190,6 +251,7 @@ function StudioReviewContent({children}){
 function StudioOverlay({model,close,short,narrow,pageRef}){
  const [query,setQuery]=useState(''),[page,setPage]=useState(0),[value,setValue]=useState(model.value||''),[range,setRange]=useState(model.item?.props.value),root=useRef(null),reader=useRef(null),optionsRef=useRef(null);
  const [perPage,setPerPage]=useState(1);
+ const dialogFocus=useStudioDialogFocus(root);
  useEffect(()=>{
   const el=optionsRef.current,view=el?.ownerDocument.defaultView;if(!el||!view)return;
   const measure=()=>{if(el.clientHeight>0)setPerPage(Math.max(1,Math.floor((el.clientHeight+6)/50)));};
@@ -203,7 +265,7 @@ function StudioOverlay({model,close,short,narrow,pageRef}){
  useEffect(()=>{const el=root.current;if(!el)return;const first=studioFocusable(el)[0];first?.focus({preventScroll:true});},[]);
  useEffect(()=>{const el=root.current;if(el&&!el.contains(el.ownerDocument.activeElement))studioFocusable(optionsRef.current||el)[0]?.focus({preventScroll:true});},[current,perPage,query]);
  const confirm=()=>{if(model.type==='edit')model.save(value);if(model.type==='range')model.item.props.onChange(Number(range));close();};
- return h(U.Focusable,{'data-df-overlay':true,ref:root,className:'df-overlay',role:'dialog','aria-modal':true,'aria-label':model.title||model.item?.label,onCancel:e=>{e?.stopPropagation?.();close();}},
+ return h(U.Focusable,{'data-df-overlay':true,ref:root,...dialogFocus,className:'df-overlay',role:'dialog','aria-modal':true,'aria-label':model.title||model.item?.label,onCancel:e=>{e?.stopPropagation?.();close();}},
   h('div',{className:'df-overlay-head'},h('div',null,h('h2',null,model.title||model.item?.label)),h(StudioButton,{onClick:close,'aria-label':'Close panel',className:'df-icon'},studioIcon('close'))),
   h('div',{className:'df-overlay-body'},
    model.type==='select'&&h(R.Fragment,null,h('input',{'aria-label':'Filter options',placeholder:'Search options…',value:query,onChange:e=>{setQuery(e.target.value);setPage(0);}}),h('div',{className:'df-options',ref:optionsRef},list.slice(current*perPage,(current+1)*perPage).map((x,i)=>h(StudioButton,{key:String(x.data)+i,className:'df-option','data-selected':x.data===model.value,onClick:()=>{model.choose(x);close();}},h('span',null,x.label),x.data===model.value?studioIcon('check',18):studioIcon('arrow',16))),!list.length&&h('div',{className:'df-empty'},'No matching options.'))),
@@ -236,7 +298,7 @@ function Studio({frameRef,frameHeight,tabs,tab,setTab,p,dirty,busy,message,error
  const pageTitle=index=>controls[index*pageSize]?.label||'Overview';
  const notesText=inventory.notes.map((x,i)=>`${String(i+1).padStart(2,'0')} / ${x.warning?'COMPATIBILITY':'INFORMATION'}\n${x.text}`).join('\n\n');
  return h(U.Focusable,{ref:frameRef,'data-df-frame':true,'data-df-studio':true,'data-short':short,'data-narrow':narrow,'data-motion':motion,className:'df-studio',style:{height:frameHeight},onButtonDown:navEvent,onCancel:e=>{e?.stopPropagation?.();if(overlay)close();else exitStudio();},'flow-children':'column'},h('style',null,studioCSS),h('div',{className:'df-atmosphere'}),
-  h('header',{className:'df-top'},h('div',{className:'df-brand'},h('span',{className:'df-logo'},studioIcon('fusion',23)),'Deck Fusion'),h('span',{className:'df-beta'},'v0.3-beta9'),h('div',{className:'df-game'},h('span',{className:'df-eyebrow'},'Active game'),h('strong',{title:p?.name},p?.name||'Select a game'),h('span',{className:dirty?'df-dirty':'df-eyebrow'},dirty?'● Unapplied changes':'Saved configuration')),
+  h('header',{className:'df-top'},h('div',{className:'df-brand'},h('span',{className:'df-logo'},studioIcon('fusion',23)),'Deck Fusion'),h('span',{className:'df-beta'},'v0.3-beta10'),h('div',{className:'df-game'},h('span',{className:'df-eyebrow'},'Active game'),h('strong',{title:p?.name},p?.name||'Select a game'),h('span',{className:dirty?'df-dirty':'df-eyebrow'},dirty?'● Unapplied changes':'Saved configuration')),
    h(StudioButton,{className:'df-icon df-motion-control',onClick:()=>{const next=!motion;setMotion(next);try{sessionStorage.setItem('deck-fusion-motion',next?'on':'off');}catch{}},'aria-label':motion?'Pause interface animation':'Enable interface animation'},studioIcon('spark',16)),
    h(StudioButton,{className:'df-primary',disabled:busy||!p,onClick:onApply},studioIcon('check',16),narrow?'Apply':'Review & apply'),h(StudioButton,{className:'df-icon',onClick:()=>exitStudio(),'aria-label':'Back to Steam'},studioIcon('close',18))),
   h('div',{className:'df-body'},h('nav',{className:'df-nav','aria-label':'Configuration tabs'},h('div',{className:'df-eyebrow df-nav-label'},'Expert Mode'),...STUDIO_TABS.map(([id,label,icon])=>h(StudioButton,{key:id,className:'df-nav-button','data-active':tab===id,'aria-label':label,'aria-current':tab===id?'page':undefined,disabled:busy,onClick:()=>setTab(id)},studioIcon(icon,18),h('span',null,label))),null),

@@ -32,7 +32,7 @@ async function host({width=1280,height=800,raw=true,native=false,modern=false,rd
   PanelSection:({title,children})=>h('section',null,h('h3',null,title),children),PanelSectionRow:({children})=>h('div',null,children),
   ButtonItem:({children,onClick,disabled})=>h('button',{onClick,disabled},children),DialogButton:({children,...props})=>h('button',props,children),
   ToggleField:()=>null,TextField:()=>null,DropdownItem:()=>null,SliderField:()=>null,
-  Focusable:React.forwardRef(({children,onActivate,onCancel,onButtonDown,focusClassName,focusWithinClassName,...props},ref)=>h('div',{...props,ref:el=>{if(el){el.__activate=onActivate;el.__cancel=onCancel;el.__button=onButtonDown;}if(typeof ref==='function')ref(el);else if(ref)ref.current=el;}},children)),
+  Focusable:React.forwardRef(({children,onActivate,onCancel,onButtonDown,onGamepadDirection,focusClassName,focusWithinClassName,...props},ref)=>h('div',{...props,ref:el=>{if(el){el.__activate=onActivate;el.__cancel=onCancel;el.__button=onButtonDown;el.__direction=onGamepadDirection;}if(typeof ref==='function')ref(el);else if(ref)ref.current=el;}},children)),
   ConfirmModal:p=>h('div',{role:'dialog'},h('h2',null,p.strTitle),p.children,h('button',{onClick:p.onCancel},'Cancel'),h('button',{disabled:p.bOKDisabled,onClick:p.onOK},p.strOKButtonText)),
   showModal(element){const close=()=>modal.render(null);modal.render(React.cloneElement(element,{closeModal:close}));return {Close:close};},
   Navigation:{Navigate:(to,replace=false)=>{if(replace)history.entries[history.index]=to;else{history.entries.splice(history.index+1);history.entries.push(to);history.index++;}renderRoute(to);},NavigateBack(){if(history.index>0)renderRoute(history.entries[--history.index]);else history.mainMenuOpens++;},CloseSideMenus(){}},staticClasses:{}
@@ -50,7 +50,7 @@ async function host({width=1280,height=800,raw=true,native=false,modern=false,rd
  const api={routerHook:{addRoute:(r,f)=>routes.set(r,f),removeRoute:r=>routes.delete(r)},call:async(method,...args)=>{calls.push({method,args});if(method==='rpc')return {ok:true,result:structuredClone(typeof fixtures[args[0]]==='function'?fixtures[args[0]](args[1]):fixtures[args[0]]||{})};if(method==='active_jobs')return {ok:true,result:[]};if(method==='start_job'){activeJob={action:args[0],payload:args[1]};return {ok:true,result:{id:'test-job'}};}if(method==='get_job'){const handler=jobResults[activeJob.action];const result=typeof handler==='function'?await handler(activeJob.payload):handler||{profile:activeJob.payload.profile||profile,approval_token:'test-approval',blockers:[],changes:[],warnings:[],launch_after:'%command% --skip-launcher',resolutions:[]};return {ok:true,result:{state:'done',result}};}throw Error(method);}};
  let liveLaunch=initialLaunch;
  Object.assign(w,{SP_REACT:React,DFL:fields,SteamClient:{Apps:{RegisterForAppDetails:(id,cb)=>{listeners.push(cb);cb({strLaunchOptions:liveLaunch});return {unregister(){}};},SetAppLaunchOptions:(id,value)=>{liveLaunch=value;listeners.forEach(cb=>cb({strLaunchOptions:value}));}},Input:{...(modern?{RegisterForControllerInputMessages:cb=>{rawState.inputCallback=cb;return {unregister:()=>{rawState.inputCallback=null;rawState.inputUnregistered=true;}}}}:{}),...(raw?{RegisterForControllerStateChanges:cb=>{rawState.callback=cb;return {unregister:()=>{rawState.callback=null;rawState.unregistered=true;}}}}:{}),...(native?{SetWebBrowserActionset:enabled=>rawState.nativeCalls.push(enabled)}:{})}},__DECKY_SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED_deckyLoaderAPIInit:{connect:()=>api}});
- w.eval(source+'\nwindow.__studio={studioInventory,useMeasuredPages,StudioReviewContent,StudioOverlay,StudioButton,StudioField,SetupStudio,EffectPicker,setupEffects,setupSteps,startupGame,sameGuidedGraphicsPlan};');
+ w.eval(source+'\nwindow.__studio={studioInventory,useMeasuredPages,StudioReviewContent,StudioOverlay,StudioButton,StudioField,SetupStudio,SetupPrompt,EffectPicker,setupEffects,setupSteps,startupGame,sameGuidedGraphicsPlan};');
  const plugin=w.__makePlugin();
  const openSidebar=async()=>{root.render(plugin.content);await settle();[...w.document.querySelectorAll('button')].find(e=>e.textContent==='Open Deck Fusion').click();await settle(280);};
  if(launchFromSidebar)await openSidebar();else{root.render(plugin.content);await settle();fields.Navigation.Navigate(guided?'/deck-fusion':'/deck-fusion/expert');await settle(280);}
@@ -697,7 +697,7 @@ test('OptiScaler D-pad and Tab navigation stay in the editor and release the bac
   const buttons=[t.el('Close OptiScaler editor'),t.el('Load installed settings'),t.el('Use guided settings'),entry,t.el('Cancel'),t.el('Save to draft')];
   const positions=[[620,0,60,40],[20,60,230,40],[300,60,230,40],[20,130,600,280],[20,460,230,40],[300,460,230,40]];
   buttons.forEach((el,i)=>{const [x,y,width,height]=positions[i];el.getBoundingClientRect=()=>({x,y,left:x,top:y,width,height,right:x+width,bottom:y+height});});
-  const dpad=code=>{let prevented=false,stopped=false;dialog.__button({detail:{button:code},preventDefault(){prevented=true;},stopPropagation(){stopped=true;}});assert.ok(prevented&&stopped);assert.ok(dialog.contains(t.w.document.activeElement));};
+  const dpad=code=>{let prevented=false,stopped=false;dialog.__direction({detail:{button:code},preventDefault(){prevented=true;},stopPropagation(){stopped=true;}});assert.ok(prevented&&stopped);assert.ok(dialog.contains(t.w.document.activeElement));};
   dpad(9);assert.ok(t.w.document.activeElement===t.el('Load installed settings'));
   dpad(12);assert.ok(t.w.document.activeElement===t.el('Use guided settings'));
   dpad(11);assert.ok(t.w.document.activeElement===t.el('Load installed settings'), 'Focus expected on Load installed settings');
@@ -730,5 +730,46 @@ test('a stale installation scan cannot expose another game’s removal action',{
   t.fixtures.removal_status={appid:'999',has_installation:true,undo_available:true,pending:true};
   await t.click('Game: Cyberpunk 2077');await t.click('Cyberpunk 2077');await settle(60);
   assert.equal(t.el('Remove existing OptiScaler / ReShade'),undefined);assert.equal(t.el('Undo last removal'),undefined);
+ }finally{await t.close();}
+});
+
+// The Steam direction callback is distinct from onButtonDown. Model its default
+// navigation after the callback so a missing cancellation can escape the panel.
+function steamDirection(t,dialog,code,repeat=false){
+ const event=new t.w.CustomEvent('steam-test-direction',{cancelable:true,detail:{button:code,is_repeat:repeat}});
+ assert.equal(typeof dialog.__direction,'function','Panel must register native direction navigation');
+ dialog.__direction(event);
+ if(!event.defaultPrevented)t.w.document.querySelector('[data-test-background]')?.focus();
+ assert.ok(event.defaultPrevented,'Steam default direction navigation must be cancelled even at edges');
+ assert.ok(dialog.contains(t.w.document.activeElement),'Focus must remain inside the active panel');
+}
+test('Steam direction events stay inside every editor panel, including repeated edge presses',{skip},async()=>{
+ const t=await host({native:true,raw:false});try{
+  const h=React.createElement;
+  const panels=[
+   ['text',t.w.__studio.StudioOverlay,{model:{type:'edit',title:'Launch options',value:'abc',save(){}},close(){},pageRef:{current:null}}],
+   ['raw INI',t.w.__studio.StudioOverlay,{model:{type:'edit',raw:true,title:'ReShade INI',value:'[GENERAL]',save(){}},close(){},pageRef:{current:null}}],
+   ['range',t.w.__studio.StudioOverlay,{model:{type:'range',title:'Range',item:{props:{value:2,min:1,max:4,step:1,onChange(){}}}},close(){},pageRef:{current:null}}],
+   ['selection',t.w.__studio.StudioOverlay,{model:{type:'select',title:'Options',options:[{label:'First',data:1},{label:'Second',data:2}],choose(){}},close(){},pageRef:{current:null}}],
+   ['effects',t.w.__studio.EffectPicker,{effects:[{key:'one',name:'One',file:'One.fx'}],selected:[],toggle(){},close(){}}],
+   ['confirmation',t.w.__studio.SetupPrompt,{model:{title:'Confirm',text:'Review',label:'Confirm'},busy:false,confirm(){},cancel(){},pageRef:{current:null}}]
+  ];
+  for(const [name,Component,props] of panels){
+   t.root.render(h('div',{'data-df-frame':true},h('button',{'data-test-background':true},'Background'),h(Component,{...props,key:name})));await settle(40);
+   const dialog=t.w.document.querySelector('[data-df-overlay]'),background=t.w.document.querySelector('[data-test-background]');
+   assert.ok(background.hasAttribute('inert'),name+' isolates background');
+   const controls=[...dialog.querySelectorAll('[data-df-focus],input,textarea')].filter(el=>el.tabIndex!==-1&&el.getAttribute('aria-disabled')!=='true');
+   controls.forEach((el,i)=>{el.getBoundingClientRect=()=>({x:30,y:30+i*55,width:200,height:40});});
+   controls[0].focus();steamDirection(t,dialog,10);assert.equal(t.w.document.activeElement,controls[1],name+' moves once');
+   // Receiving both event kinds for one press must not move twice.
+   dialog.__button({detail:{button:10},preventDefault(){},stopPropagation(){}});assert.equal(t.w.document.activeElement,controls[1]);
+   for(const code of [9,10,11,12])for(let n=0;n<12;n++)steamDirection(t,dialog,code,n>0);
+   controls.at(-1).focus();await t.key('Tab');assert.equal(t.w.document.activeElement,controls[0]);
+   await t.key('Tab',controls[0]);assert.equal(t.w.document.activeElement,controls[1]);
+   background.focus();assert.ok(dialog.contains(t.w.document.activeElement));
+   const field=dialog.querySelector('input:not([type=range]),textarea');if(field){field.focus();const arrow=new t.w.KeyboardEvent('keydown',{key:'ArrowLeft',bubbles:true,cancelable:true});field.dispatchEvent(arrow);assert.equal(arrow.defaultPrevented,false,'Text cursor stays editable');steamDirection(t,dialog,10);}
+   const keyboard=t.w.document.createElement('button');t.w.document.body.appendChild(keyboard);keyboard.focus();assert.equal(t.w.document.activeElement,keyboard);keyboard.remove();
+   t.root.render(h('div',{'data-df-frame':true},h('button',{'data-test-background':true},'Background')));await settle();assert.equal(t.w.document.querySelector('[inert]'),null);background.focus();
+  }
  }finally{await t.close();}
 });

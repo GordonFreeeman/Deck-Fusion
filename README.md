@@ -6,7 +6,7 @@ I wanted to use frame generation, better upscaling and a few ReShade effects on 
 
 You choose a game, enable the features you want, adjust their settings and apply. Each game keeps its own configuration, so you can use a different combination for Cyberpunk, The Witcher 3 or Baldur's Gate 3 without starting from scratch every time.
 
-**Current version: v0.3-beta9.** Cyberpunk 2077, The Witcher 3 and Baldur's Gate 3 have been set up successfully during development. That isn't a compatibility guarantee for every game, and the project is still in beta.
+**Current version: v0.3-beta10.** Cyberpunk 2077, The Witcher 3 and Baldur's Gate 3 have been set up successfully during development. That isn't a compatibility guarantee for every game, and the project is still in beta.
 
 ## What it does
 
@@ -20,7 +20,7 @@ You choose a game, enable the features you want, adjust their settings and apply
 
 ## What you need
 
-You'll need SteamOS, [Decky Loader](https://github.com/SteamDeckHomebrew/decky-loader), an installed game and an internet connection for component downloads.
+You'll need SteamOS, [Decky Loader](https://github.com/SteamDeckHomebrew/decky-loader), an installed game and its selected Proton version. Launch the game once while online so Steam can finish installing Proton and the Steam Linux Runtime. The full ZIP includes Deck Fusion's component downloads; the standard ZIP downloads them during setup.
 
 **LSFG requires a purchased copy of Lossless Scaling**, installed on its `lsfg-vk` branch. Deck Fusion looks for its DLL during setup; if automatic detection fails, you can enter the path yourself. The Lossless Scaling DLL is not included in this repository or the release ZIP.
 
@@ -28,11 +28,34 @@ OptiScaler needs a compatible 64-bit Windows game with a supported upscaler inpu
 
 ## Installation
 
-1. Download `Deck-Fusion-v0.3-beta9.zip` from this repository's **Releases**. Use the plugin ZIP rather than GitHub's automatically generated source archive.
+1. Download `Deck-Fusion-v0.3-beta10_full.zip` for offline setup, or `Deck-Fusion-v0.3-beta10.zip` for the smaller download from this repository's **Releases**. Use the plugin ZIP rather than GitHub's automatically generated source archive.
 2. Open Decky Loader's settings, enable developer mode if necessary, and install the plugin from the ZIP.
 3. Open Deck Fusion in the Decky sidebar, then select **Open Deck Fusion**.
 
 You can install an update over the existing plugin to keep your profiles and backups. The release ZIP contains the compiled plugin as well as the source, so you don't need to build anything on the Deck.
+
+## Full offline version
+
+`Deck-Fusion-v0.3-beta10_full.zip` includes the tools and runtime payloads that setup would otherwise download. I made this version so a moved release, broken link or changed runtime installer won't prevent you from setting up a game. The included versions will get older, but the files remain available inside the ZIP.
+
+| Component | Included version |
+| --- | --- |
+| lsfg-vk layer | 2.0.0, upstream x86 and x86-64 archive |
+| OptiScaler | v0.9.4, complete upstream archive |
+| ReShade | 6.8.0 standard build, both DLL architectures |
+| RDNA2 FSR 4 fix | fsr4xyz 4.1.1b INT8 |
+| Shader packs | Standard, SweetFX, FXShaders, qUINT, prod80, fubax and legacy |
+| Visual C++ 2022 | Both x86 and x64 redistributables matched to the pinned Winetricks recipe |
+| d3dcompiler_47 | Both Microsoft SDK CAB payloads, containing the x86 and x64 DLLs |
+| Runtime helpers | Protontricks 1.14.1 command-line helper, VDF 3.4, Winetricks and cabextract 1.11 |
+
+Install it through Decky in the same way as the standard ZIP. Setup unpacks the bundled tools into Deck Fusion's data folder and uses a separate, writable runtime cache. You don't need to install Protontricks through Discover or Flathub for this version. Allow extra free space for the extracted tools and the prefix backup made before runtime installation.
+
+The full build doesn't check for newer components or download extra shader repositories. Missing or damaged bundled files stop the affected operation and ask you to reinstall the complete ZIP. Existing cached tools and per-game settings are retained, so installing the full ZIP over a working installation won't silently downgrade its tools. Install the standard ZIP if you want online component updates again.
+
+SteamOS, Decky, Steam, your games, Proton and Steam Linux Runtime remain prerequisites. **The purchased Lossless Scaling DLL is not included** and must already be installed if you want LSFG. Bundling these files prevents broken component downloads; it cannot guarantee compatibility with future SteamOS, Steam or game updates.
+
+The exact shader commits, source URLs and SHA-256 hashes are recorded in [`bundled/manifest.json`](bundled/manifest.json). [Full bundle notes](bundled/README.md) describe the helper build and included source archives. Attach the full ZIP to a GitHub **Release**; use the standard version's source for the repository itself.
 
 ## Setting up a game
 
@@ -66,11 +89,11 @@ In game, **Insert** opens OptiScaler and **Home** opens ReShade. You can bind th
 
 ## Runtime errors and repairs
 
-The runtime step is optional. Deck Fusion checks for a compatible existing Visual C++ installation before trying to install it again, including installations made by Steam that have no Winetricks receipt. For `vcrun2022`, it uses an included, pinned Winetricks recipe through the game's Protontricks runner, with download checksum verification enabled.
+The runtime step is optional. Deck Fusion checks for a compatible existing Visual C++ installation before trying to install it again, including installations made by Steam that have no Winetricks receipt. For `vcrun2022`, it uses an included, pinned Winetricks recipe through the game's Protontricks runner, with checksum verification enabled. The full build supplies both supported runtimes from its local cache.
 
 If Winetricks says a selected runtime is already installed but its files are missing, incomplete or too old, Deck Fusion removes the stale receipt after backing up the prefix and runs the installer again. When upgrading to `vcrun2022`, this also clears older VC 2015, 2017 and 2019 receipts that would block it. Other components' receipts are kept, and the installed runtime must still pass verification before the graphics settings are applied.
 
-If an installation fails, open **Installer log** from the runtime or review screen to see the actual error. Deck Fusion keeps a backup of the prefix before installation and stops the graphics installation if the selected runtimes cannot be verified. Protontricks and its dependencies can be updated through Discover.
+If an installation fails, open **Installer log** from the runtime or review screen to see the actual error. Deck Fusion keeps a backup of the prefix before installation and stops the graphics installation if the selected runtimes cannot be verified. The standard build can use Protontricks installed through Discover. The full build uses its bundled command-line helper.
 
 If you've deleted files from the game folder or changed them manually, **Force apply settings** reinstalls the selected files and configuration after backing up what it replaces. Review also has a **Force apply…** button for a full reinstall of the selected components.
 
@@ -130,12 +153,12 @@ python3 scripts/hash_manifest.py
 python3 scripts/package.py
 ```
 
-The package script writes the release ZIP and its SHA-256 file beside the source directory. It checks the archive's integrity and that the compiled frontend matches the source. Public versions use `v0.3-beta9`; the package metadata uses `0.3.0-beta9`.
+The package script writes the release ZIP and its SHA-256 file beside the source directory. It checks the archive's integrity and that the compiled frontend matches the source. Public versions use `v0.3-beta10`; the package metadata uses `0.3.0-beta10`.
 
 The backend and interface tests use simulated game files and Steam/Decky services. They cover configuration, installation transactions and UI behavior, but cannot establish game compatibility or GPU performance. Previous test results and their limits are documented in [the verification record](agent-review.md).
 
 ## Credits and licenses
 
-Deck Fusion builds on [lsfg-vk](https://github.com/PancakeTAS/lsfg-vk), [OptiScaler](https://github.com/optiscaler/OptiScaler), [ReShade](https://reshade.me/), [Protontricks](https://github.com/Matoking/protontricks), [Winetricks](https://github.com/Winetricks/winetricks) and Decky Loader. These projects do the underlying work; Deck Fusion brings their setup and configuration together on the Deck.
+Deck Fusion builds on [lsfg-vk](https://lsfg-vk.dev/), [OptiScaler](https://github.com/optiscaler/OptiScaler), [ReShade](https://reshade.me/), [Protontricks](https://github.com/Matoking/protontricks), [Winetricks](https://github.com/Winetricks/winetricks) and Decky Loader. These projects do the underlying work; Deck Fusion brings their setup and configuration together on the Deck.
 
-Deck Fusion is released under the [MIT license](LICENSE). The embedded Decky API adapter, CA bundle and included Winetricks source retain their own licenses, available in `licenses/`, `certs/` and `vendor/winetricks/`. Downloaded components and shader packs retain their upstream licenses. Microsoft runtime installers and the proprietary Lossless Scaling DLL are not bundled.
+Deck Fusion is released under the [MIT license](LICENSE). The embedded Decky API adapter, CA bundle and included Winetricks source retain their own licenses, available in `licenses/`, `certs/` and `vendor/winetricks/`. Components and shader packs retain their upstream licenses; the full bundle includes their notices and available source archives under `bundled/`. The full ZIP includes Microsoft runtime installers but does not include the proprietary Lossless Scaling DLL. The lsfg-vk 2.0.0 archive is supplied unchanged under CC BY-NC-ND 4.0, so the full bundle is for noncommercial distribution.

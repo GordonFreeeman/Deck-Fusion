@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.3-beta10
+
+- Handle Steam's native direction-navigation callback in every editor panel, including OptiScaler, ReShade INI/preset, text, range, selection, effects and confirmation panels. Cancel navigation at panel edges, including held-button repeats.
+- Share background focus isolation, Tab wrapping, removed-control recovery and focus restoration across panels. Keep Steam menus and the on-screen keyboard accessible.
+- Preserve text editing, range-key adjustment and the effects picker's initial focus and scrolling. Avoid moving focus twice when Steam emits both button and direction events.
+- Extend regression checks to the separate native direction callback; beta9 fails these checks. Dependency payloads are unchanged.
+
 ## v0.3-beta9
 
 - Keep D-pad and keyboard focus inside Advanced OptiScaler settings. Register the INI editor as a controller target; A enters editing, while the keyboard keeps its normal text controls.
@@ -29,6 +36,13 @@
 - Complete approved launch-option replacement after runtime repair, retaining the original launch text for rollback.
 - Replace the current Steam navigation entry when opening and closing Deck Fusion. This prevents the closed app from reopening through the Home screen's Back action.
 - Apply both fixes to the standard and full distributions. Full-bundle dependency versions are unchanged.
+
+## v0.3-beta5 full distribution
+
+- Bundled graphics packages, all seven shader packs, and x86/x64 runtime payloads.
+- Added a local Protontricks command-line helper and CAB extractor.
+- Disabled component downloads and update checks in the full distribution.
+- Added offline integration tests, a payload manifest and third-party source archives.
 
 ## v0.3-beta5
 
