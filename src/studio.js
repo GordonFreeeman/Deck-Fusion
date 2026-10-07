@@ -1,4 +1,4 @@
-/* Deck Fusion Studio v0.3-beta8. Local UI only; all mutations use the existing Manager. */
+/* Deck Fusion Studio v0.3-beta9. Local UI only; all mutations use the existing Manager. */
 const STUDIO_TABS=[
  ['library','Library','grid'], ['lsfg','Motion','wave'],
  ['opti','Upscaling','layers'], ['reshade','ReShade','spark'],
@@ -147,7 +147,8 @@ function StudioField({item,open,disabled}){
   control=h(StudioButton,{className:'df-card-action',disabled:locked,onClick:()=>open({type:'select',title:label,options:p.rgOptions,value:p.selectedOption,choose:p.onChange}),'aria-label':`${label}: ${selected?.label||'Select'}`},h('span',null,selected?.label||'Select…'),studioIcon('arrow',17));
  }else if(item.kind==='text'||item.kind==='raw')control=h(StudioButton,{className:'df-card-action',disabled:locked,onClick:()=>open({type:'edit',title:label,value:String(p.value??''),raw:item.kind==='raw',save:value=>p.onChange(item.kind==='raw'?value:{target:{value}})}),'aria-label':`Edit ${label}`},h('span',null,p.value||'Tap to enter…'),studioIcon('tool',16));
  else if(item.kind==='info')control=h(StudioButton,{className:'df-card-action',onClick:()=>open({type:'reader',title:label,text:p.value}),'aria-label':`Read ${label}`},h('span',null,p.value.split('\n').slice(1).join(' ')||p.value),studioIcon('info',17));
- else control=h(StudioButton,{className:'df-card-action',disabled:locked,onClick:p.onClick,'aria-label':label},h('span',null,label),studioIcon('arrow',17));
+ else control=h(StudioButton,{className:p['data-df-action']?'df-action-button':'df-card-action',disabled:locked,onClick:p.onClick,'aria-label':label},h('span',null,label),!p['data-df-action']&&studioIcon('arrow',17));
+ if(p['data-df-action'])return h('div',{className:'df-setup-action','data-df-card':label},control,help);
  return h('div',{className:'df-card','data-df-card':label},h('div',{className:'df-card-title'},h('strong',null,item.kind==='button'?(item.group||'Action'):label),item.kind==='slider'&&h('span',{className:'df-range-value'},Number(p.value).toFixed(Number.isInteger(Number(p.value))?0:2)),help),control);
 }
 function useMeasuredPages(text,readerRef){
@@ -235,7 +236,7 @@ function Studio({frameRef,frameHeight,tabs,tab,setTab,p,dirty,busy,message,error
  const pageTitle=index=>controls[index*pageSize]?.label||'Overview';
  const notesText=inventory.notes.map((x,i)=>`${String(i+1).padStart(2,'0')} / ${x.warning?'COMPATIBILITY':'INFORMATION'}\n${x.text}`).join('\n\n');
  return h(U.Focusable,{ref:frameRef,'data-df-frame':true,'data-df-studio':true,'data-short':short,'data-narrow':narrow,'data-motion':motion,className:'df-studio',style:{height:frameHeight},onButtonDown:navEvent,onCancel:e=>{e?.stopPropagation?.();if(overlay)close();else exitStudio();},'flow-children':'column'},h('style',null,studioCSS),h('div',{className:'df-atmosphere'}),
-  h('header',{className:'df-top'},h('div',{className:'df-brand'},h('span',{className:'df-logo'},studioIcon('fusion',23)),'Deck Fusion'),h('span',{className:'df-beta'},'v0.3-beta8'),h('div',{className:'df-game'},h('span',{className:'df-eyebrow'},'Active game'),h('strong',{title:p?.name},p?.name||'Select a game'),h('span',{className:dirty?'df-dirty':'df-eyebrow'},dirty?'● Unapplied changes':'Saved configuration')),
+  h('header',{className:'df-top'},h('div',{className:'df-brand'},h('span',{className:'df-logo'},studioIcon('fusion',23)),'Deck Fusion'),h('span',{className:'df-beta'},'v0.3-beta9'),h('div',{className:'df-game'},h('span',{className:'df-eyebrow'},'Active game'),h('strong',{title:p?.name},p?.name||'Select a game'),h('span',{className:dirty?'df-dirty':'df-eyebrow'},dirty?'● Unapplied changes':'Saved configuration')),
    h(StudioButton,{className:'df-icon df-motion-control',onClick:()=>{const next=!motion;setMotion(next);try{sessionStorage.setItem('deck-fusion-motion',next?'on':'off');}catch{}},'aria-label':motion?'Pause interface animation':'Enable interface animation'},studioIcon('spark',16)),
    h(StudioButton,{className:'df-primary',disabled:busy||!p,onClick:onApply},studioIcon('check',16),narrow?'Apply':'Review & apply'),h(StudioButton,{className:'df-icon',onClick:()=>exitStudio(),'aria-label':'Back to Steam'},studioIcon('close',18))),
   h('div',{className:'df-body'},h('nav',{className:'df-nav','aria-label':'Configuration tabs'},h('div',{className:'df-eyebrow df-nav-label'},'Expert Mode'),...STUDIO_TABS.map(([id,label,icon])=>h(StudioButton,{key:id,className:'df-nav-button','data-active':tab===id,'aria-label':label,'aria-current':tab===id?'page':undefined,disabled:busy,onClick:()=>setTab(id)},studioIcon(icon,18),h('span',null,label))),null),

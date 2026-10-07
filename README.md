@@ -6,7 +6,7 @@ I wanted to use frame generation, better upscaling and a few ReShade effects on 
 
 You choose a game, enable the features you want, adjust their settings and apply. Each game keeps its own configuration, so you can use a different combination for Cyberpunk, The Witcher 3 or Baldur's Gate 3 without starting from scratch every time.
 
-**Current version: v0.3-beta8.** Cyberpunk 2077, The Witcher 3 and Baldur's Gate 3 have been set up successfully during development. That isn't a compatibility guarantee for every game, and the project is still in beta.
+**Current version: v0.3-beta9.** Cyberpunk 2077, The Witcher 3 and Baldur's Gate 3 have been set up successfully during development. That isn't a compatibility guarantee for every game, and the project is still in beta.
 
 ## What it does
 
@@ -28,7 +28,7 @@ OptiScaler needs a compatible 64-bit Windows game with a supported upscaler inpu
 
 ## Installation
 
-1. Download `Deck-Fusion-v0.3-beta8.zip` from this repository's **Releases**. Use the plugin ZIP rather than GitHub's automatically generated source archive.
+1. Download `Deck-Fusion-v0.3-beta9.zip` from this repository's **Releases**. Use the plugin ZIP rather than GitHub's automatically generated source archive.
 2. Open Decky Loader's settings, enable developer mode if necessary, and install the plugin from the ZIP.
 3. Open Deck Fusion in the Decky sidebar, then select **Open Deck Fusion**.
 
@@ -48,7 +48,7 @@ The optional [FSR 4.1.1b RDNA2 fix](https://github.com/the3rdparty1917/fsr4xyz/r
 
 Open **Upscaling output > Advanced OptiScaler settings** to edit the full `OptiScaler.ini` for the selected game. You can start with the configuration Deck Fusion would apply, choose **Load installed settings** to import the file already in the game's executable folder, or choose **Use guided settings** to return to the normal presets.
 
-**Save to draft** checks the INI and remembers it for that game. **Cancel** discards the editor's changes. The game folder is updated when you press **Apply this game**, using the same backup and recovery process as the rest of setup. Restart the game afterwards. A keyboard works directly; on the Deck, use **Steam + X** to open the on-screen keyboard, and the right stick or touch to scroll the editor.
+**Save to draft** checks the INI and remembers it for that game. **Cancel** discards the editor's changes. The game folder is updated when you press **Apply this game**, using the same backup and recovery process as the rest of setup. Restart the game afterwards. Use the **D-pad** to move between the editor and its buttons, then **A** to edit the INI. A keyboard works directly; on the Deck, use **Steam + X** to open the on-screen keyboard, and the right stick or touch to scroll the editor. Focus stays inside the editor until you close it.
 
 While a manual INI is active, the guided output picker is disabled so it cannot overwrite your changes. `LoadReshade` still follows Deck Fusion's ReShade toggle. Keep the renderer settings and `[FrameGen]` section, and set `Enabled` to `true` or `false` explicitly. Enabling OptiScaler frame generation while LSFG is enabled is rejected.
 
@@ -88,7 +88,7 @@ On **Choose a game**, select **Remove existing OptiScaler / ReShade**. Deck Fusi
 
 For files installed by Deck Fusion, removal checks the recorded hashes and restores the original backups where available. For an installation made by another tool, a DLL must match a cached injector or identify itself as OptiScaler or ReShade in its version resources. A filename such as `version.dll` is never enough. Unknown DLLs, edited configuration files, untracked presets and shader folders, and untracked shared SDK libraries stay where they are. An older or unusual build that cannot be identified is also kept.
 
-Every changed file gets a recovery copy under the game's profile directory. Open the same removal screen and choose **Undo last removal** to review restoring the files and settings. Undo stops if those files or the Steam launch options have changed since removal, so it cannot silently overwrite later edits. If an operation was interrupted, the removal screen offers **Recover operation** instead.
+The removal button appears only when Deck Fusion identifies an OptiScaler or ReShade injector DLL. Unknown filenames and leftover presets do not make it appear. Every changed file gets a recovery copy under the game's profile directory. Choose **Undo last removal** on the game selection screen to review restoring the files and settings, even when no injector DLL remains. Undo stops if those files or the Steam launch options have changed since removal, so it cannot silently overwrite later edits. If an operation was interrupted, the game selection screen also offers **Recover interrupted operation**.
 
 Removal keeps your applied LSFG settings, frame cap and Windows runtimes; unapplied draft edits are discarded. Launch overrides are only stripped for identified injector filenames that have been removed. If a Proton prefix forces native-only loading for one of those missing DLLs, removal stops until that override is corrected. It does not edit the prefix behind your back.
 
@@ -130,7 +130,7 @@ python3 scripts/hash_manifest.py
 python3 scripts/package.py
 ```
 
-The package script writes the release ZIP and its SHA-256 file beside the source directory. It checks the archive's integrity and that the compiled frontend matches the source. Public versions use `v0.3-beta8`; the package metadata uses `0.3.0-beta8`.
+The package script writes the release ZIP and its SHA-256 file beside the source directory. It checks the archive's integrity and that the compiled frontend matches the source. Public versions use `v0.3-beta9`; the package metadata uses `0.3.0-beta9`.
 
 The backend and interface tests use simulated game files and Steam/Decky services. They cover configuration, installation transactions and UI behavior, but cannot establish game compatibility or GPU performance. Previous test results and their limits are documented in [the verification record](agent-review.md).
 

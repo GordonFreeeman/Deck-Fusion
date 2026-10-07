@@ -1,6 +1,6 @@
 {
   "name": "deck-fusion",
-  "version": "0.3.0-beta8",
+  "version": "0.3.0-beta9",
   "description": "Guided per-game LSFG, OptiScaler and ReShade setup for Steam Deck, with optional Windows runtimes and recoverable game-file installation.",
   "type": "module",
   "license": "MIT",
@@ -9,7 +9,7 @@
     "test": "python3 scripts/build.py && python3 -m pytest tests -q && node --test tests/*.test.mjs",
     "check": "python3 scripts/build.py && node --check dist/index.js && node --test tests/*.test.mjs"
   },
-  "displayVersion": "0.3-beta8",
+  "displayVersion": "0.3-beta9",
   "engines": {
     "node": ">=24"
   },

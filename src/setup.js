@@ -37,6 +37,8 @@ function startupGame(games,remembered,runningIds=[],router){
  return ids.map(id=>games.find(g=>String(g.appid)===id)).find(Boolean)||games[0];
 }
 const setupCSS=`
+.df-setup-action{display:flex;align-items:center;gap:8px;flex-shrink:0}.df-setup .df-action-button{width:100%;min-height:40px;justify-content:center;font-size:13px;font-weight:600;color:#f5ca91;border:1px solid #d6a05970;background:linear-gradient(180deg,#76522e70,#4b351f60);border-radius:7px;box-shadow:0 2px 4px #0003}.df-setup .df-action-button:hover{background:#76522e90}.df-setup-action>.df-help{margin-left:0}
+
 .df-setup .df-top{height:50px;padding:0 22px}.df-setup .df-brand{font-size:17px}.df-setup .df-beta{font-size:10px}.df-setup-main{flex:1;min-height:0;display:flex;flex-direction:column;padding:14px 24px 10px;gap:12px}.df-phase-list{display:flex;gap:6px;flex-shrink:0}.df-phase{flex:1;font-size:11px;color:#919bb0;border-top:2px solid #ffffff18;padding-top:6px}.df-phase[data-active=true]{color:var(--cyan);border-color:var(--cyan)}.df-setup-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-shrink:0}.df-setup-heading h1{font-size:25px;font-weight:600;letter-spacing:-.5px}.df-setup-body{flex:1;min-height:0;display:flex;flex-direction:column;gap:10px}.df-setup-fields{display:flex;flex-direction:column;gap:9px;min-height:0}.df-setup .df-card{display:grid;grid-template-columns:minmax(0,1fr) minmax(160px,44%);gap:16px;padding:11px 14px;border-radius:9px;min-height:58px;flex-shrink:0}.df-setup .df-card-title strong{font-size:14px}.df-setup .df-card-action,.df-setup .df-switch{font-size:13px;min-height:32px}.df-setup .df-help{margin-left:8px}.df-setup .df-range-value{font-size:15px}.df-setup:not([data-setup-step=review]):not([data-setup-done=true]) .df-setup-notes{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.df-setup[data-setup-step=review] .df-setup-body{gap:6px}.df-setup-notes{font-size:12px;line-height:1.45;color:#aebbd0}.df-setup-notes p{margin:0 0 6px}.df-setup-controls{display:flex;gap:10px;align-items:center;flex-shrink:0;margin-top:auto}.df-setup-controls .df-primary{margin-left:auto;min-width:148px}.df-setup-controls>.df-subtle{margin-left:auto}.df-setup .df-footer{padding:7px 22px;min-height:30px}.df-setup-summary{margin:0;padding:0;display:flex;flex-direction:column;gap:0}.df-setup-summary>div{display:grid;grid-template-columns:140px minmax(0,1fr);padding:5px 0;border-bottom:1px solid #ffffff0c;gap:14px;font-size:13px;line-height:1.3}.df-setup-summary dt{color:#9eacc4}.df-setup-summary dd{margin:0;overflow-wrap:anywhere}.df-setup-summary dd[data-truncate=true]{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}.df-setup-alert{font-size:12px;line-height:1.4;color:#f5ca91;display:flex;align-items:center;gap:10px}.df-setup-alert span{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}.df-setup-alert .df-btn{margin-left:auto;flex-shrink:0}.df-setup-bottom{display:flex;gap:8px;flex-wrap:wrap}.df-effects-list{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;touch-action:pan-y;padding:3px 6px 3px 3px;scrollbar-color:#64758d #111728;scrollbar-width:thin}.df-studio .df-effect{display:flex;width:100%!important;min-height:38px;padding:5px 10px;border-radius:5px;border:0;border-bottom:1px solid #ffffff0a;gap:14px;text-align:left;justify-content:space-between;font-size:13px}.df-effect-name{min-width:0;display:flex;align-items:baseline;gap:10px}.df-effect-name strong{font-size:13px;font-weight:500}.df-effect-name small{color:#9cabc1;font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.df-effect-check{width:17px;height:17px;flex-shrink:0;border:1px solid #a3b2c4;border-radius:3px;display:grid;place-items:center}.df-effect[aria-checked=true] .df-effect-check{background:var(--cyan);color:#102723;border-color:var(--cyan)}
 .df-setup[data-short=true] .df-top{height:42px}.df-setup[data-short=true] .df-setup-main{padding:8px 18px;gap:7px}.df-setup[data-short=true] .df-phase{font-size:10px;padding-top:4px}.df-setup[data-short=true] .df-setup-heading h1{font-size:20px}.df-setup[data-short=true] .df-card{padding:6px 12px;min-height:48px;gap:10px}.df-setup[data-short=true] .df-card-title strong{font-size:13px}.df-setup[data-short=true] .df-setup-fields{gap:6px}.df-setup[data-short=true] .df-setup-body{gap:6px}.df-setup[data-short=true]:not([data-setup-step=review]):not([data-setup-done=true]) .df-setup-notes{display:none}.df-setup[data-short=true] .df-card{min-height:42px;padding:4px 10px}.df-setup[data-short=true] .df-setup-heading .df-help{min-height:24px;padding:3px}.df-setup[data-short=true] .df-setup-controls .df-btn{padding:6px 10px}.df-setup[data-short=true] .df-setup-notes{font-size:11px}.df-setup[data-short=true] .df-setup-summary>div{font-size:12px;padding:2px 0;grid-template-columns:125px minmax(0,1fr)}.df-setup[data-short=true] .df-setup-controls .df-btn{min-height:30px}.df-setup[data-narrow=true] .df-card{grid-template-columns:1fr;gap:5px;padding:9px}.df-setup[data-narrow=true] .df-phase{font-size:9px}.df-setup[data-narrow=true] .df-setup-summary>div{grid-template-columns:96px minmax(0,1fr)}.df-setup[data-narrow=true] .df-setup-main{padding:10px 12px}.df-setup[data-narrow=true] .df-effect-name{display:block}
 `;
@@ -144,15 +146,59 @@ function useSetupNavigation(frameRef,actions){
  return event=>{const code=event.detail?.button;if(code>=5&&code<=8){event.preventDefault?.();event.stopPropagation?.();bridge.current?.(code);}};
 }
 
+/* The INI text area is not a Steam navigation node. Register its container and
+   keep both Steam navigation and browser focus inside this editor. */
+function useOptiEditorFocus(root,editor,entry){
+ useEffect(()=>{
+  const dialog=root.current,doc=dialog?.ownerDocument,frame=dialog?.closest('[data-df-frame]');if(!dialog||!frame)return;
+  const previous=doc.activeElement,siblings=[...frame.children].filter(el=>el!==dialog&&!el.contains(dialog)&&['HEADER','MAIN','FOOTER'].includes(el.tagName));
+  const inert=siblings.map(el=>[el,el.hasAttribute('inert')]);siblings.forEach(el=>el.setAttribute('inert',''));
+  let last=entry.current,redirecting=false;
+  const focus=event=>{
+   if(dialog.contains(event.target)){last=event.target;return;}
+   // Steam's own menus and on-screen keyboard remain outside this boundary.
+   if(!redirecting&&frame.contains(event.target)){
+    redirecting=true;(last?.isConnected&&!last.disabled?last:entry.current)?.focus({preventScroll:true});redirecting=false;
+   }
+  };
+  doc.addEventListener('focusin',focus,true);entry.current?.focus({preventScroll:true});
+  return()=>{doc.removeEventListener('focusin',focus,true);inert.forEach(([el,wasInert])=>{if(!wasInert)el.removeAttribute('inert');});if(previous?.isConnected&&frame.contains(previous)&&previous.getAttribute('aria-disabled')!=='true')previous.focus({preventScroll:true});};
+ },[]);
+ const move=direction=>{
+  const dialog=root.current;if(!dialog)return;
+  if(dialog.ownerDocument.activeElement===editor.current)entry.current?.focus({preventScroll:true});
+  const all=studioFocusable(dialog),active=dialog.ownerDocument.activeElement;
+  if(!all.includes(active)){all[0]?.focus({preventScroll:true});return;}
+  const a=active.getBoundingClientRect(),vertical=['up','down'].includes(direction),sign=['up','left'].includes(direction)?-1:1;
+  // Use the overlapping edges of the wide editor, so it remains reachable
+  // between its toolbar and footer instead of being skipped by center scoring.
+  const choices=all.filter(el=>el!==active).map(el=>{
+   const b=el.getBoundingClientRect(),forward=sign*(vertical?b.y+b.height/2-a.y-a.height/2:b.x+b.width/2-a.x-a.width/2);
+   const gap=vertical?Math.max(0,a.x-b.x-b.width,b.x-a.x-a.width):Math.max(0,a.y-b.y-b.height,b.y-a.y-a.height);
+   return {el,forward,gap};
+  }).filter(x=>x.forward>4).sort((a,b)=>a.gap-b.gap||a.forward-b.forward);
+  choices[0]?.el.focus({preventScroll:true});
+ };
+ return {
+  onButtonDown:event=>{const direction={9:'up',10:'down',11:'left',12:'right'}[event.detail?.button];if(direction){event.preventDefault?.();event.stopPropagation?.();move(direction);}},
+  onKeyDownCapture:event=>{
+   if(event.key==='Tab'){
+    const all=studioFocusable(root.current),index=all.indexOf(root.current.ownerDocument.activeElement),next=event.shiftKey?(index<=0?all.length-1:index-1):(index+1)%all.length;
+    event.preventDefault();event.stopPropagation();all[next]?.focus({preventScroll:true});
+   }else if(event.target!==editor.current){const direction={ArrowUp:'up',ArrowDown:'down',ArrowLeft:'left',ArrowRight:'right'}[event.key];if(direction){event.preventDefault();event.stopPropagation();move(direction);}}
+  }
+ };
+}
 function OptiConfigEditor({model,busy,error,save,cancel}){
- const [value,setValue]=useState(model.text),[manual,setManual]=useState(model.manual),root=useRef(null),editor=useRef(null);
+ const [value,setValue]=useState(model.text),[manual,setManual]=useState(model.manual),root=useRef(null),editor=useRef(null),entry=useRef(null);
  useEffectListScroll(editor);
- useEffect(()=>{editor.current?.focus({preventScroll:true});},[]);
- return h(U.Focusable,{ref:root,className:'df-overlay df-opti-editor','data-df-overlay':true,role:'dialog','aria-modal':true,'aria-label':'Advanced OptiScaler settings',onCancel:e=>{e?.stopPropagation?.();if(!busy)cancel();}},
+ const focus=useOptiEditorFocus(root,editor,entry);
+ return h(U.Focusable,{ref:root,className:'df-overlay df-opti-editor','data-df-overlay':true,role:'dialog','aria-modal':true,'aria-label':'Advanced OptiScaler settings','flow-children':'column',...focus,onCancel:e=>{e?.stopPropagation?.();if(!busy)cancel();}},
   h('div',{className:'df-overlay-head'},h('h2',null,'Advanced OptiScaler settings'),h(StudioButton,{className:'df-icon',disabled:busy,'aria-label':'Close OptiScaler editor',onClick:cancel},studioIcon('close'))),
-  h('div',{className:'df-subtle'},`OptiScaler ${model.version||''} · ${manual?'Manual INI':'Guided settings'} · Steam + X opens the keyboard.`),
+  h('div',{className:'df-subtle'},`OptiScaler ${model.version||''} · ${manual?'Manual INI':'Guided settings'} · D-pad navigates · A edits · Steam + X keyboard.`),
   h('div',{className:'df-setup-bottom'},h(StudioButton,{disabled:busy||model.installed===null||model.installed===undefined,onClick:()=>{setValue(model.installed);setManual(true);}},'Load installed settings'),h(StudioButton,{disabled:busy,onClick:()=>{setValue(model.defaults);setManual(false);}},'Use guided settings')),
-  h('textarea',{ref:editor,'aria-label':'OptiScaler.ini','data-df-scroll':true,spellCheck:false,disabled:busy,value,onChange:e=>{setValue(e.target.value);setManual(true);},style:{flex:1,minHeight:0,width:'100%',resize:'none',boxSizing:'border-box',fontFamily:'monospace',fontSize:12,lineHeight:1.4,overflowY:'auto',touchAction:'pan-y'}}),
+  h(U.Focusable,{ref:entry,role:'group','aria-label':'Edit OptiScaler.ini','data-df-focus':true,tabIndex:busy?-1:0,'aria-disabled':busy||undefined,focusClassName:'df-native-focus',onActivate:event=>{event?.stopPropagation?.();if(!busy)editor.current?.focus({preventScroll:true});},style:{display:'flex',flex:1,minHeight:0}},
+   h('textarea',{ref:editor,'aria-label':'OptiScaler.ini','data-df-scroll':true,tabIndex:-1,spellCheck:false,disabled:busy,value,onChange:e=>{setValue(e.target.value);setManual(true);},style:{flex:1,minHeight:0,width:'100%',resize:'none',boxSizing:'border-box',fontFamily:'monospace',fontSize:12,lineHeight:1.4,overflowY:'auto',touchAction:'pan-y'}})),
   h('div',{className:'df-subtle'},'Manual values replace the guided INI presets. LoadReshade follows the ReShade toggle. Saving only updates this game’s draft.'),
   error&&h('div',{className:'df-setup-alert',role:'alert'},error),
   h('div',{className:'df-overlay-foot'},h(StudioButton,{disabled:busy,onClick:cancel},'Cancel'),h(StudioButton,{className:'df-primary',disabled:busy,onClick:()=>save(manual?value:'')},busy?'Checking…':'Save to draft')));
@@ -171,7 +217,7 @@ function SetupStudio({frameRef,frameHeight,p,step,done,content,summary,review,bu
  useEffect(()=>{setOverlay(step==='effects'?{type:'effects'}:null);if(step==='effects')return;const view=frameRef.current?.ownerDocument.defaultView;const timer=view?.requestAnimationFrame(()=>{const el=frameRef.current?.querySelector('.df-setup-fields');studioFocusable(el||frameRef.current)[0]?.focus({preventScroll:true});});return()=>{if(timer!==undefined)view?.cancelAnimationFrame(timer);};},[step]);
  const details=()=>open({type:'reader',title:'Apply details',text:[...((review?.blockers||[]).map(x=>`${x.title}\n${x.detail}`)),...(review?.resolutions||[]).map(x=>`${x.title}\n${x.before} → ${x.after}\n${x.detail}`),...(review?.conflicts||[]).map(x=>JSON.stringify(x)),...(review?.warnings||[]),...(p?.reshade.techniques||[])].join('\n\n')||'No additional details.'});
  return h(U.Focusable,{ref:frameRef,className:'df-studio df-setup','data-df-frame':true,'data-df-studio':true,'data-setup-step':step,'data-setup-done':done,'data-short':short,'data-narrow':narrow,style:{height:frameHeight},'flow-children':'column',onButtonDown:navEvent,onCancel:e=>{e?.stopPropagation?.();if(optiEditor){if(!busy)onOptiCancel();}else if(prompt){if(!busy)onPromptCancel();}else if(overlay)close();else if(!busy)onBack();}},h('style',null,studioCSS+setupCSS),h('div',{className:'df-atmosphere'}),
-  h('header',{className:'df-top'},h('div',{className:'df-brand'},h('span',{className:'df-logo'},studioIcon('fusion',22)),'Deck Fusion'),h('span',{className:'df-beta'},'v0.3-beta8'),h('div',{className:'df-game'},h('strong',null,p?.name||'Choose a game')),h(StudioButton,{onClick:onExit,disabled:locked,'aria-label':'Exit to Steam Home',className:'df-icon'},studioIcon('close',18))),
+  h('header',{className:'df-top'},h('div',{className:'df-brand'},h('span',{className:'df-logo'},studioIcon('fusion',22)),'Deck Fusion'),h('span',{className:'df-beta'},'v0.3-beta9'),h('div',{className:'df-game'},h('strong',null,p?.name||'Choose a game')),h(StudioButton,{onClick:onExit,disabled:locked,'aria-label':'Exit to Steam Home',className:'df-icon'},studioIcon('close',18))),
   h('main',{className:'df-setup-main'},h('div',{className:'df-phase-list','aria-label':'Setup progress'},...SETUP_PHASES.map((title,i)=>h('span',{key:title,className:'df-phase','data-active':i===meta.phase||done,'aria-current':i===meta.phase?'step':undefined},`${i+1}  ${title}`))),
    h('div',{className:'df-setup-heading'},h('h1',null,done?'Setup complete':meta.title),!done&&inventory.notes.length>0&&h(StudioButton,{className:'df-help',disabled:locked,'aria-label':'Step information',onClick:()=>open({type:'reader',title:meta.title,text:inventory.notes.map(x=>x.text).join('\n\n')})},studioIcon('info',18)),!done&&h('span',{className:'df-subtle'},index<0?'LSFG setup':`Tab ${steps.filter(x=>x.phase===meta.phase).findIndex(x=>x.id===step)+1} / ${steps.filter(x=>x.phase===meta.phase).length}`)),
    h('div',{className:'df-setup-body'},

@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.3-beta9
+
+- Keep D-pad and keyboard focus inside Advanced OptiScaler settings. Register the INI editor as a controller target; A enters editing, while the keyboard keeps its normal text controls.
+- Give removal a distinct button style and show it only when an identifiable injector DLL is present. Keep Undo and interrupted-operation recovery available separately.
+- Read prefix DLL load orders using Wine’s registry syntax, including disabled values, without changing the registry or stopping at an unrelated entry. Keep native-only and unreadable-prefix removal safeguards.
+- Keep the full bundle’s dependency versions unchanged.
+
 ## v0.3-beta8
 
 - Add Advanced OptiScaler settings to the guided Upscaling output screen, with a complete INI editor, installed-file import and a return to guided settings.

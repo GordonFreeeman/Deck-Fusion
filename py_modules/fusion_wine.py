@@ -24,19 +24,36 @@ def module_basename(name: str) -> str:
     return override_name(name.replace('\\', '/').rsplit('/', 1)[-1]).lstrip('*')
 
 
+def registry_load_order(value: str) -> str:
+    """Wine's registry parser differs from the strict environment editor.
+
+    Match ntdll's parse_load_order: split on comma/space/tab, recognize the
+    initial n/b of each token, and return once both preferences are present.
+    Empty strings, 'disabled' and other tokens without n/b disable the DLL.
+    Registry contents are inspected here; they are never rewritten.
+    """
+    modes = []
+    for token in re.split(r'[, \t]+', value):
+        mode = token[:1].casefold()
+        if mode in ('n', 'b') and mode not in modes:
+            modes.append(mode)
+            if len(modes) == 2: break
+    return ','.join(modes)
+
+
 def registry_entries(prefix: Path, exe: str) -> tuple[list, list]:
     found, warnings = [], []
     target = f'software\\wine\\appdefaults\\{exe}\\dlloverrides'.casefold()
     # HKCU takes precedence. HKLM entries are shown/reserved conservatively too.
     for filename in ('system.reg', 'user.reg'):
         f = prefix / filename
-        if not f.is_file(): continue
-        if f.stat().st_size > 24 * 1024 * 1024:
-            warnings.append(f'{filename} exceeds the 24 MB read limit; not fully inspected.')
-            continue
         scope = None
         try:
-            with f.open(encoding='utf-8', errors='replace') as handle:
+            if not f.is_file(): continue
+            if f.stat().st_size > 24 * 1024 * 1024:
+                warnings.append(f'{filename} exceeds the 24 MB read limit; not fully inspected.')
+                continue
+            with f.open(encoding='utf-8') as handle:
                 for line in handle:
                     if line.startswith('['):
                         section = line[1:].split(']', 1)[0].replace('\\\\', '\\').casefold()
@@ -45,11 +62,10 @@ def registry_entries(prefix: Path, exe: str) -> tuple[list, list]:
                     m = re.match(r'^"((?:[^"\\]|\\.)*)"="((?:[^"\\]|\\.)*)"', line)
                     if not m: continue
                     name, value = (re.sub(r'\\([\\"])', r'\1', x) for x in m.groups())
-                    parsed = parse_dll_overrides(name + '=' + value)
-                    for key, order in parsed.items():
-                        found.append({'name': key, 'order': order, 'scope': scope,
-                                      'source': f'{filename} · {scope}', 'prefix': str(prefix)})
-        except (OSError, FusionError) as error:
+                    found.append({'name': override_name(name), 'order': registry_load_order(value),
+                                  'raw_order': value, 'scope': scope,
+                                  'source': f'{filename} · {scope}', 'prefix': str(prefix)})
+        except (OSError, UnicodeError) as error:
             warnings.append(f'Cannot completely inspect {filename}: {error}')
     return found, warnings
 
@@ -145,7 +161,7 @@ def inspect_overrides(engine, raw: dict, launch: str) -> dict:
     effective.update(inherited); effective.update(custom)
     return {'launch_value': text, 'launch_overrides': inherited, 'registry': registry,
             'custom': custom, 'effective_user': effective, 'reserved': reserved,
-            'files': files, 'prefixes': [str(x) for x in prefixes], 'warnings': warnings,
+            'files': files, 'prefixes': [str(x) for x in prefixes], 'warnings': list(dict.fromkeys(warnings)),
             'exe': str(exe), 'kind': pe_info(exe)['kind'],
             'note': 'Read-only inspection. Overrides choose native/builtin loading when a module is requested; they do not force-load arbitrary DLLs.'}
 

@@ -53,7 +53,7 @@ def exposed(function):
 class Plugin:
     async def _main(self):
         self._initialize()
-        LOG.info('Deck Fusion 0.3-beta8 initialized, no root privilege requested.')
+        LOG.info('Deck Fusion 0.3-beta9 initialized, no root privilege requested.')
 
     def _initialize(self):
         if getattr(self, '_engine', None) is not None: return
@@ -94,6 +94,7 @@ class Plugin:
                 if action == 'scan': return e.scan(appid)
                 if action == 'detect_api': return e.detect_api(payload['profile'], payload.get('launch', ''))
                 if action == 'launch_cleanup': return e.launch_cleanup(appid, payload.get('launch', ''))
+                if action == 'removal_status': return GraphicsRemoval(e).status(payload)
                 if action == 'removal_plan': return GraphicsRemoval(e).plan(payload)
                 if action == 'removal_prepare': return GraphicsRemoval(e).prepare(payload, progress)
                 if action == 'opti_editor':return e.opti_editor(payload['profile'])

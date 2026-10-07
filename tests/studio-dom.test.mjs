@@ -43,7 +43,7 @@ async function host({width=1280,height=800,raw=true,native=false,modern=false,rd
   fields.ScrollPanelGroup=({children})=>h(React.Fragment,null,children);
  }
  const profile={schema:4,appid:'123',name:'Cyberpunk 2077',root:'/games/Cyberpunk',exe:'/games/Cyberpunk/bin/x64/Cyberpunk2077.exe',api:'dx12',base_fps:30,lsfg:{enabled:true,multiplier:2,flow_scale:.75,performance_mode:true,allow_fp16:true,respect_deck_limiter:false,override_present_mode:false,preserve_swapchain_image_count:false},opti:{fsr4_rdna2_fix:rdna2Fix,enabled:false,proxy:'dxgi',dx11:'auto',dx12:'auto',vulkan:'auto',spoof:'auto',fg:false,fsr_mode:'auto',fsr4_watermark:false,mouse_input:'auto',steam_input:'auto',overrides:{}},reshade:{mode:'off',proxy:'auto',performance:true,overlay_key:36,packs:[],techniques:[],uniforms:{},raw_preset:'',raw_config:''},wine:{custom_overrides:''},setup:{version:0,runtimes:[],runtime_prefix:''}};
- const fixtures={state:{games:[{appid:'123',name:profile.name,root:profile.root}],packages:{},legacy_layers:[],settings:{include_shortcuts:false},bundled:{},hardware:{}},profile,scan:{candidates:[{path:profile.exe,relative:'bin/x64/Cyberpunk2077.exe',bits:64,api:'dx12',kind:'pe'}],warnings:[]},schema:{opti:[],shaders:[],packs:[]},wine_context:{files:[],prefixes:[],registry:[]},requirements:{items:[],needs_registration:false}};
+ const fixtures={state:{games:[{appid:'123',name:profile.name,root:profile.root}],packages:{},legacy_layers:[],settings:{include_shortcuts:false},bundled:{},hardware:{}},profile,scan:{candidates:[{path:profile.exe,relative:'bin/x64/Cyberpunk2077.exe',bits:64,api:'dx12',kind:'pe'}],warnings:[]},schema:{opti:[],shaders:[],packs:[]},wine_context:{files:[],prefixes:[],registry:[]},removal_status:{appid:profile.appid,has_installation:false,undo_available:false,pending:false},requirements:{items:[],needs_registration:false}};
  let activeJob=null;const jobResults={runtime_status:{prefix:'/compat/123/pfx',prefixes:['/compat/123/pfx'],helper:{available:true},runtimes:[],blockers:[]}};
  fixtures.launch_cleanup=({launch})=>({before:launch,cleaned:launch,after:launch,removed:[],warnings:[]});
  if(prepare)prepare({fixtures,profile,fields,jobResults});
@@ -620,6 +620,7 @@ test('native trigger edges suppress browser clicks, deduplicate Steam events and
 });
 function removalFixtures({fixtures,profile,jobResults}){
  let removed=false;
+ fixtures.removal_status=()=>({appid:profile.appid,has_installation:!removed,undo_available:removed,pending:false});
  const before='WINEDLLOVERRIDES="winmm=n,b" %command%',after='%command%';
  jobResults.removal_plan=payload=>({appid:profile.appid,exe:profile.exe,can_apply:true,file_count:1,approval_token:payload.undo?'undo-token':'remove-token',undo:!!payload.undo,undo_available:removed,blockers:[],files:[{path:'winmm.dll',action:'back-up-and-remove',identity:'OptiScaler',reason:'Verified identity'},{path:'version.dll',action:'keep',identity:'Unidentified',reason:'Unknown ownership'}],warnings:['Every changed file is backed up.'],launch_before:payload.undo?after:before,launch_after:payload.undo?before:after});
  jobResults.removal_prepare=payload=>{removed=!payload.undo;return {token:'removal-journal',launch_after:payload.undo?before:after};};
@@ -632,7 +633,7 @@ test('removal preview is inert, preserves unknowns in the list, and supports con
   await t.click('Remove existing OptiScaler / ReShade');await t.click('Back up and remove');await settle(80);
   assert.equal(t.getLaunch(),'%command%');assert.equal(setupStep(t),'game');
   const payload=t.calls.find(x=>x.method==='start_job'&&x.args[0]==='removal_prepare').args[1];assert.equal(payload.approval,'remove-token');
-  await t.click('Remove existing OptiScaler / ReShade');await t.click('Undo last removal');await t.click('Undo removal');await settle(80);
+  assert.equal(t.el('Remove existing OptiScaler / ReShade'),undefined);await t.click('Undo last removal');await t.click('Undo removal');await settle(80);
   assert.equal(t.getLaunch(),'WINEDLLOVERRIDES="winmm=n,b" %command%');assert.equal(jobs(t).includes('runtime_install'),false);
  }finally{await t.close();}
 });
@@ -685,5 +686,49 @@ test('invalid manual OptiScaler settings stay open and trigger navigation cannot
   await t.click('Save to draft');await settle(40);assert.match(t.w.document.querySelector('[role=alert]').textContent,/Invalid/);assert.ok(t.w.document.querySelector('textarea'));
   assert.equal(draft(t).opti.manual_ini||'','');assert.equal(jobs(t).includes('prepare'),false);
   await t.key('Escape',t.w.document.querySelector('textarea'));assert.equal(t.w.document.querySelector('textarea'),null);
+ }finally{await t.close();}
+});
+
+test('OptiScaler D-pad and Tab navigation stay in the editor and release the background on close',{skip},async()=>{
+ const t=await host({guided:true,modern:true,native:true,raw:false,prepare:optiEditorFixtures});try{
+  await reachUpscale(t);const opener=t.el('Advanced OptiScaler settings');opener.focus();await t.click('Advanced OptiScaler settings');
+  const dialog=t.w.document.querySelector('.df-opti-editor'),entry=t.el('Edit OptiScaler.ini'),textarea=t.w.document.querySelector('textarea');
+  assert.ok(t.w.document.activeElement===entry);assert.ok(t.w.document.querySelector('.df-setup-main').hasAttribute('inert'));
+  const buttons=[t.el('Close OptiScaler editor'),t.el('Load installed settings'),t.el('Use guided settings'),entry,t.el('Cancel'),t.el('Save to draft')];
+  const positions=[[620,0,60,40],[20,60,230,40],[300,60,230,40],[20,130,600,280],[20,460,230,40],[300,460,230,40]];
+  buttons.forEach((el,i)=>{const [x,y,width,height]=positions[i];el.getBoundingClientRect=()=>({x,y,left:x,top:y,width,height,right:x+width,bottom:y+height});});
+  const dpad=code=>{let prevented=false,stopped=false;dialog.__button({detail:{button:code},preventDefault(){prevented=true;},stopPropagation(){stopped=true;}});assert.ok(prevented&&stopped);assert.ok(dialog.contains(t.w.document.activeElement));};
+  dpad(9);assert.ok(t.w.document.activeElement===t.el('Load installed settings'));
+  dpad(12);assert.ok(t.w.document.activeElement===t.el('Use guided settings'));
+  dpad(11);assert.ok(t.w.document.activeElement===t.el('Load installed settings'), 'Focus expected on Load installed settings');
+  dpad(12);assert.ok(t.w.document.activeElement===t.el('Use guided settings'), 'Focus expected on Use guided settings');
+  dpad(10);assert.ok(t.w.document.activeElement===entry);
+  for(let i=0;i<10;i++)dpad(10);assert.ok(dialog.contains(t.w.document.activeElement));
+  entry.__activate({stopPropagation(){}});assert.ok(t.w.document.activeElement===textarea);
+  const arrow=new t.w.KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true,cancelable:true});textarea.dispatchEvent(arrow);assert.equal(arrow.defaultPrevented,false,'Keyboard arrows still edit the INI');
+  await t.key('Tab',textarea);assert.ok(t.w.document.activeElement===t.el('Close OptiScaler editor'), 'Focus expected on Close OptiScaler editor');
+  t.el('Save to draft').focus();await t.key('Tab');assert.ok(t.w.document.activeElement===t.el('Close OptiScaler editor'), 'Focus expected on Close OptiScaler editor');
+  await t.key('Tab',t.w.document.activeElement);assert.ok(dialog.contains(t.w.document.activeElement));
+  // Emulate Steam navigating a node despite the standard browser inert boundary.
+  const background=t.w.document.querySelector('.df-setup-controls .df-primary');background.tabIndex=0;background.focus();assert.ok(dialog.contains(t.w.document.activeElement));
+  const keyboard=t.w.document.createElement('button');t.w.document.body.appendChild(keyboard);keyboard.focus();assert.ok(t.w.document.activeElement===keyboard,'Steam keyboard/menus remain usable');
+  await t.click('Cancel');assert.equal(t.w.document.querySelector('.df-opti-editor'),null);assert.equal(t.w.document.querySelector('[inert]'),null);
+  assert.ok(t.w.document.querySelector('[data-df-frame]').contains(t.w.document.activeElement));
+ }finally{await t.close();}
+});
+
+test('removal action is hidden without an identified installation and styled as a button when present',{skip},async()=>{
+ const none=await host({guided:true});try{assert.equal(none.el('Remove existing OptiScaler / ReShade'),undefined);assert.equal(none.el('Undo last removal'),undefined);}finally{await none.close();}
+ const found=await host({guided:true,prepare:removalFixtures});try{
+  const button=found.el('Remove existing OptiScaler / ReShade');assert.ok(button.classList.contains('df-action-button'));assert.equal(button.querySelector('svg'),null);assert.equal(button.getAttribute('role'),'button');
+ }finally{await found.close();}
+});
+
+test('a stale installation scan cannot expose another game’s removal action',{skip},async()=>{
+ const t=await host({guided:true});try{
+  // A mismatched scan result must never be attached to the current game.
+  t.fixtures.removal_status={appid:'999',has_installation:true,undo_available:true,pending:true};
+  await t.click('Game: Cyberpunk 2077');await t.click('Cyberpunk 2077');await settle(60);
+  assert.equal(t.el('Remove existing OptiScaler / ReShade'),undefined);assert.equal(t.el('Undo last removal'),undefined);
  }finally{await t.close();}
 });

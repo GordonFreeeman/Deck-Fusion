@@ -202,6 +202,48 @@ class Transaction:
                         'before_hash': sha256(work / before) if before else None,
                         'after_hash': sha256(work / after) if after else None})
 
+    def prepare_patch(self, game, profile, expected, launch_before, launch_after,
+                      token, operation, guard, progress=lambda *_: None, modes=None):
+        """Journal explicit removal/undo changes derived by the removal planner.
+
+        Every displaced byte is copied and verified before modifying any target.
+        Unknown files never enter this map. Committed snapshots stay available
+        for Undo; interrupted operations use the normal recovery journal.
+        """
+        if self.pending(): raise FusionError('Recover the unfinished operation first.')
+        if not re.fullmatch('[0-9a-f]{32}', token): raise FusionError('Invalid removal token.')
+        work = safe_target(self.store, 'transactions/' + token)
+        work.mkdir(parents=True, exist_ok=False)
+        actions = []
+        for area, changes in (('game', game), ('profile', profile)):
+            base = self.root if area == 'game' else self.store
+            for rel, source in sorted(changes.items()):
+                target = safe_target(base, rel)
+                current = sha256(target) if target.is_file() else None
+                if target.exists() and not target.is_file(): raise FusionError('Not a regular file: ' + rel)
+                if current != expected[area][rel]: raise FusionError('File changed after removal review: ' + rel)
+                mode = (modes or {}).get((area, rel), stat.S_IMODE(target.stat().st_mode) if target.exists() else (0o600 if area == 'profile' else 0o644))
+                self._stage(actions, work, target, source, mode, area, rel)
+                if actions[-1]['before_hash'] != current: raise FusionError('File changed while backing up: ' + rel)
+                if source is not None and actions[-1]['after_hash'] != source_hash(source):
+                    raise FusionError('Restoration source changed: ' + rel)
+        guard()  # Recheck the game and the complete reviewed inventory after staging.
+        journal = {'token': token, 'root': str(self.root), 'phase': 'applying',
+                   'operation': operation, 'actions': actions,
+                   'launch_before': launch_before, 'launch_after': launch_after}
+        atomic_json(self.journal_path, journal)
+        try:
+            for i, action in enumerate(actions):
+                self._apply(action, work)
+                progress('Updating removal files and recovery records', (i+1)/max(1,len(actions)))
+            journal['phase'] = 'awaiting-steam'
+            atomic_json(self.journal_path, journal)
+        except BaseException:
+            self.rollback(token)
+            raise
+        return {'token': token, 'launch_before': launch_before, 'launch_after': launch_after,
+                'backup': str(work), 'operation': operation}
+
     def _target(self, action):
         return safe_target(self.root if action['area'] == 'game' else self.store, action['path'])
 
